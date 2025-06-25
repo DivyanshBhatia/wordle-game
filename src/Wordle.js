@@ -14,6 +14,20 @@ const Wordle = () => {
   const maxGuesses = 6;
   const wordLength = 5;
 
+  const fetchWordMeaning = async (word) => {
+    try {
+      const response = await fetch(`https://wordlegame-0n81.onrender.com/word-meaning/${word.toLowerCase()}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return data;
+    } catch (err) {
+      console.error('Error fetching word meaning:', err);
+      return null;
+    }
+  };
+
   const fetchTodaysWord = async () => {
     try {
       setGameStatus('loading');
@@ -32,7 +46,11 @@ const Wordle = () => {
         const solution = data.solution.toUpperCase();
         console.log('Setting target word:', solution);
         setTargetWord(solution);
-        setWordMeaning(data.meaning || null);
+
+        // Fetch meaning for the word
+        const meaning = await fetchWordMeaning(solution);
+        setWordMeaning(meaning);
+
         setGameStatus('playing');
         resetGame();
       } else {
@@ -43,7 +61,10 @@ const Wordle = () => {
       console.error('Error fetching today\'s word:', err);
       setError(`Could not fetch today's word: ${err.message}`);
       setTargetWord('REACT');
-      setWordMeaning({
+
+      // Fetch meaning for fallback word
+      const meaning = await fetchWordMeaning('REACT');
+      setWordMeaning(meaning || {
         word: 'REACT',
         phonetic: '/riˈækt/',
         meanings: [
@@ -53,6 +74,7 @@ const Wordle = () => {
           }
         ]
       });
+
       setGameStatus('playing');
       resetGame();
     }
@@ -72,10 +94,14 @@ const Wordle = () => {
     }
   }, [gameStatus]);
 
-  const setNewWord = () => {
+  const setNewWord = async () => {
     if (customWord.length === wordLength && /^[A-Za-z]+$/.test(customWord)) {
       setTargetWord(customWord.toUpperCase());
-      setWordMeaning(null); // Clear meaning for custom words
+
+      // Fetch meaning for custom word
+      const meaning = await fetchWordMeaning(customWord);
+      setWordMeaning(meaning);
+
       setCustomWord('');
       resetGame();
     }
