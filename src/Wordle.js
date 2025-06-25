@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 const Wordle = () => {
   const [targetWord, setTargetWord] = useState('');
+  const [wordMeaning, setWordMeaning] = useState(null);
   const [customWord, setCustomWord] = useState('');
   const [guesses, setGuesses] = useState([]);
   const [currentGuess, setCurrentGuess] = useState('');
@@ -25,25 +26,33 @@ const Wordle = () => {
       }
 
       const data = await response.json();
-      console.log('API Response:', data); // Add this for debugging
+      console.log('API Response:', data);
 
-      // Check if we have a solution
       if (data.solution && typeof data.solution === 'string') {
         const solution = data.solution.toUpperCase();
-        console.log('Setting target word:', solution); // Add this for debugging
+        console.log('Setting target word:', solution);
         setTargetWord(solution);
+        setWordMeaning(data.meaning || null);
         setGameStatus('playing');
         resetGame();
       } else {
-        // Only throw error if there's actually an error or no solution
         console.error('Invalid API response:', data);
         throw new Error(data.error || 'No solution found in API response');
       }
     } catch (err) {
       console.error('Error fetching today\'s word:', err);
       setError(`Could not fetch today's word: ${err.message}`);
-      // Fallback to a default word
       setTargetWord('REACT');
+      setWordMeaning({
+        word: 'REACT',
+        phonetic: '/riˈækt/',
+        meanings: [
+          {
+            partOfSpeech: 'verb',
+            definition: 'respond or behave in a particular way in response to something'
+          }
+        ]
+      });
       setGameStatus('playing');
       resetGame();
     }
@@ -66,6 +75,7 @@ const Wordle = () => {
   const setNewWord = () => {
     if (customWord.length === wordLength && /^[A-Za-z]+$/.test(customWord)) {
       setTargetWord(customWord.toUpperCase());
+      setWordMeaning(null); // Clear meaning for custom words
       setCustomWord('');
       resetGame();
     }
@@ -307,7 +317,32 @@ const Wordle = () => {
                     😔 Game Over! The word was: {targetWord}
                   </div>
                 )}
-                <div className="mt-2 space-x-2">
+
+                {/* Word Meaning Display - Only show when game is over (won OR lost) AND meaning exists */}
+                {(gameStatus === 'won' || gameStatus === 'lost') && wordMeaning && (
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-left">
+                    <h3 className="font-bold text-lg text-blue-800 mb-2">
+                      Word: {wordMeaning.word}
+                      {wordMeaning.phonetic && (
+                        <span className="text-sm font-normal text-blue-600 ml-2">
+                          {wordMeaning.phonetic}
+                        </span>
+                      )}
+                    </h3>
+                    {wordMeaning.meanings && wordMeaning.meanings.map((meaning, index) => (
+                      <div key={index} className="mb-2">
+                        <span className="font-semibold text-blue-700 capitalize">
+                          {meaning.partOfSpeech}:
+                        </span>
+                        <span className="text-blue-800 ml-1">
+                          {meaning.definition}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-4 space-x-2">
                   <button
                     onClick={resetGame}
                     className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
