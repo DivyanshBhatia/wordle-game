@@ -25,19 +25,24 @@ const Wordle = () => {
       }
 
       const data = await response.json();
+      console.log('API Response:', data); // Add this for debugging
 
-      if (data.solution) {
+      // Check if we have a solution
+      if (data.solution && typeof data.solution === 'string') {
         const solution = data.solution.toUpperCase();
+        console.log('Setting target word:', solution); // Add this for debugging
         setTargetWord(solution);
         setGameStatus('playing');
         resetGame();
       } else {
-        // Handle API error response
-        throw new Error(data.error || 'API returned error');
+        // Only throw error if there's actually an error or no solution
+        console.error('Invalid API response:', data);
+        throw new Error(data.error || 'No solution found in API response');
       }
     } catch (err) {
       console.error('Error fetching today\'s word:', err);
       setError(`Could not fetch today's word: ${err.message}`);
+      // Fallback to a default word
       setTargetWord('REACT');
       setGameStatus('playing');
       resetGame();
