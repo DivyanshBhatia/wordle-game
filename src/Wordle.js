@@ -26,7 +26,7 @@ const Wordle = () => {
 
       const data = await response.json();
 
-      if (data.success && data.solution) {
+      if (data.solution) {
         const solution = data.solution.toUpperCase();
         setTargetWord(solution);
         setGameStatus('playing');
