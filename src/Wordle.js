@@ -10,6 +10,8 @@ const Wordle = () => {
   const [shake, setShake] = useState(false);
   const [usedLetters, setUsedLetters] = useState({});
   const [error, setError] = useState('');
+  const [validationMessage, setValidationMessage] = useState('');
+  const [isValidating, setIsValidating] = useState(false);
 
   const maxGuesses = 6;
   const wordLength = 5;
@@ -25,6 +27,16 @@ const Wordle = () => {
     } catch (err) {
       console.error('Error fetching word meaning:', err);
       return null;
+    }
+  };
+
+  const validateWord = async (word) => {
+    try {
+      const meaning = await fetchWordMeaning(word);
+      return meaning !== null && meaning.meanings && meaning.meanings.length > 0;
+    } catch (err) {
+      console.error('Error validating word:', err);
+      return false;
     }
   };
 
@@ -89,6 +101,7 @@ const Wordle = () => {
     setGuesses([]);
     setCurrentGuess('');
     setUsedLetters({});
+    setValidationMessage('');
     if (gameStatus !== 'loading') {
       setGameStatus('playing');
     }
@@ -154,13 +167,50 @@ const Wordle = () => {
     setUsedLetters(newUsedLetters);
   };
 
-  const submitGuess = () => {
+  const submitGuess = async () => {
     if (currentGuess.length !== wordLength) {
       setShake(true);
-      setTimeout(() => setShake(false), 500);
+      setValidationMessage('Word must be 5 letters long');
+      setTimeout(() => {
+        setShake(false);
+        setValidationMessage('');
+      }, 2000);
       return;
     }
 
+    // Check if the guess is the target word (always allow)
+    if (currentGuess === targetWord) {
+      const result = checkGuess(currentGuess);
+      const newGuess = { word: currentGuess, result };
+      const newGuesses = [...guesses, newGuess];
+
+      setGuesses(newGuesses);
+      updateUsedLetters(currentGuess, result);
+      setGameStatus('won');
+      setCurrentGuess('');
+      return;
+    }
+
+    // Validate the word by checking if it has a meaning
+    setIsValidating(true);
+    setValidationMessage('Checking word...');
+
+    const isValid = await validateWord(currentGuess);
+
+    setIsValidating(false);
+
+    if (!isValid) {
+      setShake(true);
+      setValidationMessage('Sorry, does not look to be a valid English word');
+      setTimeout(() => {
+        setShake(false);
+        setValidationMessage('');
+      }, 3000);
+      return;
+    }
+
+    // Word is valid, proceed with the guess
+    setValidationMessage('');
     const result = checkGuess(currentGuess);
     const newGuess = { word: currentGuess, result };
     const newGuesses = [...guesses, newGuess];
@@ -178,16 +228,18 @@ const Wordle = () => {
   };
 
   const handleKeyPress = useCallback((e) => {
-    if (gameStatus !== 'playing') return;
+    if (gameStatus !== 'playing' || isValidating) return;
 
     if (e.key === 'Enter') {
       submitGuess();
     } else if (e.key === 'Backspace') {
       setCurrentGuess(prev => prev.slice(0, -1));
+      setValidationMessage(''); // Clear validation message when user starts typing
     } else if (/^[A-Za-z]$/.test(e.key) && currentGuess.length < wordLength) {
       setCurrentGuess(prev => prev + e.key.toUpperCase());
+      setValidationMessage(''); // Clear validation message when user starts typing
     }
-  }, [currentGuess, gameStatus, targetWord, guesses, usedLetters]);
+  }, [currentGuess, gameStatus, targetWord, guesses, usedLetters, isValidating]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
@@ -224,14 +276,16 @@ const Wordle = () => {
   };
 
   const handleKeyClick = (key) => {
-    if (gameStatus !== 'playing') return;
+    if (gameStatus !== 'playing' || isValidating) return;
 
     if (key === 'ENTER') {
       submitGuess();
     } else if (key === '⌫') {
       setCurrentGuess(prev => prev.slice(0, -1));
+      setValidationMessage(''); // Clear validation message when user starts typing
     } else if (currentGuess.length < wordLength) {
       setCurrentGuess(prev => prev + key);
+      setValidationMessage(''); // Clear validation message when user starts typing
     }
   };
 
@@ -260,7 +314,18 @@ const Wordle = () => {
           </div>
         )}
 
-
+        {/* Validation Message */}
+        {validationMessage && (
+          <div className={`mb-4 p-3 rounded text-sm text-center font-semibold ${
+            validationMessage.includes('valid English word')
+              ? 'bg-red-100 border border-red-400 text-red-700'
+              : validationMessage.includes('Checking word')
+              ? 'bg-blue-100 border border-blue-400 text-blue-700'
+              : 'bg-orange-100 border border-orange-400 text-orange-700'
+          }`}>
+            {validationMessage}
+          </div>
+        )}
 
         {/* Game Board */}
         {gameStatus !== 'loading' && (
@@ -356,8 +421,8 @@ const Wordle = () => {
                       onClick={() => handleKeyClick(key)}
                       className={`${getKeyStyle(key)} ${
                         key === 'ENTER' || key === '⌫' ? 'px-3 sm:px-4' : ''
-                      }`}
-                      disabled={gameStatus !== 'playing'}
+                      } ${isValidating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={gameStatus !== 'playing' || isValidating}
                     >
                       {key}
                     </button>
