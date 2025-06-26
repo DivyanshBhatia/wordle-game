@@ -388,6 +388,9 @@ const Wordle = () => {
                         </span>
                         <span className="text-blue-800 ml-1">
                           {meaning.definition}
+                          {meaning.example && (
+                            <div><strong>Example:</strong> {meaning.example}</div>
+                          )}
                         </span>
                       </div>
                     ))}
