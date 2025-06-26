@@ -92,6 +92,52 @@ const Wordle = () => {
     }
   };
 
+  const fetchNewWord = async () => {
+    try {
+      setGameStatus('loading');
+      setError('');
+      const url = 'https://wordlegame-0n81.onrender.com/wordle-word?today=false';
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('New Word API Response:', data);
+
+      if (data.solution && typeof data.solution === 'string') {
+        const solution = data.solution.toUpperCase();
+        console.log('Setting new target word:', solution);
+        setTargetWord(solution);
+
+        // Fetch meaning for the word
+        const meaning = await fetchWordMeaning(solution);
+        setWordMeaning(meaning);
+
+        setGameStatus('playing');
+        resetGame();
+      } else {
+        console.error('Invalid API response:', data);
+        throw new Error(data.error || 'No solution found in API response');
+      }
+    } catch (err) {
+      console.error('Error fetching new word:', err);
+      setError(`Could not fetch new word: ${err.message}`);
+      // Fall back to a random word from a small list
+      const fallbackWords = ['BEACH', 'CRANE', 'FLAME', 'GRAPE', 'HOUSE'];
+      const randomWord = fallbackWords[Math.floor(Math.random() * fallbackWords.length)];
+      setTargetWord(randomWord);
+
+      // Fetch meaning for fallback word
+      const meaning = await fetchWordMeaning(randomWord);
+      setWordMeaning(meaning);
+
+      setGameStatus('playing');
+      resetGame();
+    }
+  };
+
   // Fetch today's word on component mount
   useEffect(() => {
     fetchTodaysWord();
@@ -303,7 +349,7 @@ const Wordle = () => {
         {/* Loading State */}
         {gameStatus === 'loading' && (
           <div className="text-center mb-6">
-            <div className="text-base sm:text-lg font-semibold">Loading today's word...</div>
+            <div className="text-base sm:text-lg font-semibold">Loading word...</div>
           </div>
         )}
 
@@ -405,7 +451,7 @@ const Wordle = () => {
                     Play Again
                   </button>
                   <button
-                    onClick={fetchTodaysWord}
+                    onClick={fetchNewWord}
                     className="px-3 sm:px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm sm:text-base"
                   >
                     New Word
