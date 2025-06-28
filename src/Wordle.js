@@ -609,6 +609,11 @@ const Wordle = () => {
                           {wordMeaning.phonetic}
                         </span>
                       )}
+                      {wordMeaning.hindi_translation && (
+                        <span className="text-sm font-normal text-blue-600 ml-2">
+                          {wordMeaning.hindi_translation}
+                        </span>
+                      )}
                     </h3>
                     {wordMeaning.meanings && wordMeaning.meanings.map((meaning, index) => (
                       <div key={index} className="mb-2 text-sm sm:text-base">
