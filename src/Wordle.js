@@ -12,9 +12,93 @@ const Wordle = () => {
   const [error, setError] = useState('');
   const [validationMessage, setValidationMessage] = useState('');
   const [isValidating, setIsValidating] = useState(false);
+  const [gameHistory, setGameHistory] = useState([]);
+  const [showStats, setShowStats] = useState(false);
 
   const maxGuesses = 6;
   const wordLength = 5;
+
+  // Cookie management functions
+  const getCookie = (name) => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+  };
+
+  const setCookie = (name, value, days = 1) => {
+    const expires = new Date();
+    expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
+  };
+
+  const deleteCookie = (name) => {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+  };
+
+  const getTodayDateString = () => {
+    return new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+  };
+
+  const loadGameHistory = () => {
+    const historyData = getCookie('wordleHistory');
+    const historyDate = getCookie('wordleHistoryDate');
+    const today = getTodayDateString();
+
+    if (historyDate !== today) {
+      // Clear old history if date is different
+      deleteCookie('wordleHistory');
+      deleteCookie('wordleHistoryDate');
+      setGameHistory([]);
+      return [];
+    }
+
+    if (historyData) {
+      try {
+        const history = JSON.parse(decodeURIComponent(historyData));
+        setGameHistory(history);
+        return history;
+      } catch (error) {
+        console.error('Error parsing game history:', error);
+        setGameHistory([]);
+        return [];
+      }
+    }
+
+    return [];
+  };
+
+  const saveGameResult = (result) => {
+    const today = getTodayDateString();
+    const currentHistory = loadGameHistory();
+    const newHistory = [...currentHistory, result];
+
+    setGameHistory(newHistory);
+    setCookie('wordleHistory', encodeURIComponent(JSON.stringify(newHistory)));
+    setCookie('wordleHistoryDate', today);
+  };
+
+  const getGameStats = (history) => {
+    const totalGames = history.length;
+    const wins = history.filter(game => game.won).length;
+    const losses = totalGames - wins;
+    const winPercentage = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
+
+    const guessDistribution = [0, 0, 0, 0, 0, 0]; // Index 0 = 1 guess, Index 5 = 6 guesses
+    history.forEach(game => {
+      if (game.won && game.guesses <= 6) {
+        guessDistribution[game.guesses - 1]++;
+      }
+    });
+
+    return {
+      totalGames,
+      wins,
+      losses,
+      winPercentage,
+      guessDistribution
+    };
+  };
 
   const fetchWordMeaning = async (word) => {
     try {
@@ -138,8 +222,9 @@ const Wordle = () => {
     }
   };
 
-  // Fetch today's word on component mount
+  // Load game history on component mount
   useEffect(() => {
+    loadGameHistory();
     fetchTodaysWord();
   }, []);
 
@@ -234,6 +319,16 @@ const Wordle = () => {
       updateUsedLetters(currentGuess, result);
       setGameStatus('won');
       setCurrentGuess('');
+
+      // Save game result
+      const gameResult = {
+        word: targetWord,
+        won: true,
+        guesses: newGuesses.length,
+        date: new Date().toISOString(),
+        timestamp: Date.now()
+      };
+      saveGameResult(gameResult);
       return;
     }
 
@@ -266,8 +361,26 @@ const Wordle = () => {
 
     if (currentGuess === targetWord) {
       setGameStatus('won');
+      // Save game result
+      const gameResult = {
+        word: targetWord,
+        won: true,
+        guesses: newGuesses.length,
+        date: new Date().toISOString(),
+        timestamp: Date.now()
+      };
+      saveGameResult(gameResult);
     } else if (newGuesses.length >= maxGuesses) {
       setGameStatus('lost');
+      // Save game result
+      const gameResult = {
+        word: targetWord,
+        won: false,
+        guesses: newGuesses.length,
+        date: new Date().toISOString(),
+        timestamp: Date.now()
+      };
+      saveGameResult(gameResult);
     }
 
     setCurrentGuess('');
@@ -341,10 +454,80 @@ const Wordle = () => {
     ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '⌫']
   ];
 
+  const stats = getGameStats(gameHistory);
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-2 sm:p-4">
       <div className="max-w-md w-full px-2 sm:px-0">
-        <h1 className="text-3xl sm:text-4xl font-bold text-center mb-6 sm:mb-8 text-gray-800">Wordle</h1>
+        <div className="flex justify-between items-center mb-6 sm:mb-8">
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-800">Wordle</h1>
+          <button
+            onClick={() => setShowStats(!showStats)}
+            className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm font-semibold"
+          >
+            📊 Stats
+          </button>
+        </div>
+
+        {/* Statistics Panel */}
+        {showStats && (
+          <div className="mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 className="text-xl font-bold mb-4 text-center">Today's Statistics</h2>
+            <div className="grid grid-cols-4 gap-4 text-center mb-4">
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{stats.totalGames}</div>
+                <div className="text-xs text-gray-600">Games</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">{stats.wins}</div>
+                <div className="text-xs text-gray-600">Wins</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-red-600">{stats.losses}</div>
+                <div className="text-xs text-gray-600">Losses</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-purple-600">{stats.winPercentage}%</div>
+                <div className="text-xs text-gray-600">Win Rate</div>
+              </div>
+            </div>
+
+            {stats.totalGames > 0 && (
+              <>
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold mb-2">Guess Distribution</h3>
+                  {stats.guessDistribution.map((count, index) => (
+                    <div key={index} className="flex items-center mb-1">
+                      <span className="text-xs w-4">{index + 1}</span>
+                      <div className="flex-1 mx-2 bg-gray-200 rounded">
+                        <div
+                          className="bg-green-500 text-white text-xs text-center rounded px-1"
+                          style={{ width: `${stats.wins > 0 ? (count / stats.wins) * 100 : 0}%`, minWidth: count > 0 ? '20px' : '0' }}
+                        >
+                          {count > 0 ? count : ''}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">Recent Games</h3>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {gameHistory.slice(-5).reverse().map((game, index) => (
+                      <div key={index} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded">
+                        <span className="font-mono">{game.word}</span>
+                        <span className={`font-semibold ${game.won ? 'text-green-600' : 'text-red-600'}`}>
+                          {game.won ? `✓ ${game.guesses}/6` : '✗ Lost'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Loading State */}
         {gameStatus === 'loading' && (
