@@ -14,6 +14,9 @@ const Wordle = () => {
   const [isValidating, setIsValidating] = useState(false);
   const [gameHistory, setGameHistory] = useState([]);
   const [showStats, setShowStats] = useState(false);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [maxStreak, setMaxStreak] = useState(0);
+  const [todayGamePlayed, setTodayGamePlayed] = useState(false);
 
   const maxGuesses = 6;
   const wordLength = 5;
@@ -26,7 +29,7 @@ const Wordle = () => {
     return null;
   };
 
-  const setCookie = (name, value, days = 1) => {
+  const setCookie = (name, value, days = 365) => {
     const expires = new Date();
     expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
     document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
@@ -38,6 +41,125 @@ const Wordle = () => {
 
   const getTodayDateString = () => {
     return new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+  };
+
+  const getYesterdayDateString = () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  };
+
+  // Today's game session management
+  const getTodayGameSession = () => {
+    const sessionData = getCookie('wordleTodaySession');
+    if (sessionData) {
+      try {
+        const data = JSON.parse(decodeURIComponent(sessionData));
+        const today = getTodayDateString();
+        
+        // Check if session is for today
+        if (data.date === today) {
+          return data;
+        } else {
+          // Old session, clear it
+          deleteCookie('wordleTodaySession');
+          return null;
+        }
+      } catch (error) {
+        console.error('Error parsing today session:', error);
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const saveTodayGameSession = (sessionData) => {
+    setCookie('wordleTodaySession', encodeURIComponent(JSON.stringify(sessionData)), 1);
+  };
+
+  const clearTodayGameSession = () => {
+    deleteCookie('wordleTodaySession');
+  };
+
+  // Streak management functions
+  const loadStreakData = () => {
+    const streakData = getCookie('wordleStreak');
+    if (streakData) {
+      try {
+        const data = JSON.parse(decodeURIComponent(streakData));
+        setCurrentStreak(data.currentStreak || 0);
+        setMaxStreak(data.maxStreak || 0);
+        return data;
+      } catch (error) {
+        console.error('Error parsing streak data:', error);
+        setCurrentStreak(0);
+        setMaxStreak(0);
+        return { currentStreak: 0, maxStreak: 0, lastWonDate: '' };
+      }
+    }
+    return { currentStreak: 0, maxStreak: 0, lastWonDate: '' };
+  };
+
+  const updateStreak = (won) => {
+    const today = getTodayDateString();
+    const streakData = loadStreakData();
+    const lastWonDate = streakData.lastWonDate;
+    const yesterday = getYesterdayDateString();
+
+    let newCurrentStreak = streakData.currentStreak;
+    let newMaxStreak = streakData.maxStreak;
+
+    if (won) {
+      // Check if already won today
+      if (lastWonDate === today) {
+        // Already won today, don't update streak
+        return;
+      }
+
+      // Check if won yesterday (consecutive day)
+      if (lastWonDate === yesterday) {
+        newCurrentStreak += 1;
+      } else if (lastWonDate === '') {
+        // First time winning
+        newCurrentStreak = 1;
+      } else {
+        // Streak broken, start new streak
+        newCurrentStreak = 1;
+      }
+
+      // Update max streak if current exceeds it
+      if (newCurrentStreak > newMaxStreak) {
+        newMaxStreak = newCurrentStreak;
+      }
+
+      // Save updated streak data
+      const updatedStreakData = {
+        currentStreak: newCurrentStreak,
+        maxStreak: newMaxStreak,
+        lastWonDate: today
+      };
+
+      setCookie('wordleStreak', encodeURIComponent(JSON.stringify(updatedStreakData)), 365);
+      setCurrentStreak(newCurrentStreak);
+      setMaxStreak(newMaxStreak);
+    } else {
+      // Lost the game
+      // Only reset streak if we haven't already lost today
+      if (lastWonDate !== today) {
+        // Check if we had a streak from yesterday
+        if (lastWonDate === yesterday || lastWonDate === '') {
+          // Reset current streak but keep max streak
+          const updatedStreakData = {
+            currentStreak: 0,
+            maxStreak: newMaxStreak,
+            lastWonDate: lastWonDate
+          };
+
+          setCookie('wordleStreak', encodeURIComponent(JSON.stringify(updatedStreakData)), 365);
+          setCurrentStreak(0);
+        }
+      }
+    }
   };
 
   const loadGameHistory = () => {
@@ -76,6 +198,9 @@ const Wordle = () => {
     setGameHistory(newHistory);
     setCookie('wordleHistory', encodeURIComponent(JSON.stringify(newHistory)));
     setCookie('wordleHistoryDate', today);
+
+    // Update streak based on result
+    updateStreak(result.won);
   };
 
   const getGameStats = (history) => {
@@ -124,10 +249,31 @@ const Wordle = () => {
     }
   };
 
+  const restoreTodaySession = async (session) => {
+    setTargetWord(session.targetWord);
+    setGuesses(session.guesses);
+    setUsedLetters(session.usedLetters);
+    setGameStatus(session.gameStatus);
+    setTodayGamePlayed(true);
+
+    // Fetch meaning for the word
+    const meaning = await fetchWordMeaning(session.targetWord);
+    setWordMeaning(meaning);
+  };
+
   const fetchTodaysWord = async () => {
     try {
       setGameStatus('loading');
       setError('');
+      
+      // Check if today's game was already played
+      const todaySession = getTodayGameSession();
+      if (todaySession) {
+        console.log('Restoring today\'s session:', todaySession);
+        await restoreTodaySession(todaySession);
+        return;
+      }
+
       const url = 'https://wordlegame-0n81.onrender.com/wordle-word';
 
       const response = await fetch(url);
@@ -148,6 +294,7 @@ const Wordle = () => {
         setWordMeaning(meaning);
 
         setGameStatus('playing');
+        setTodayGamePlayed(false);
         resetGame();
       } else {
         console.error('Invalid API response:', data);
@@ -172,6 +319,7 @@ const Wordle = () => {
       });
 
       setGameStatus('playing');
+      setTodayGamePlayed(false);
       resetGame();
     }
   };
@@ -200,6 +348,7 @@ const Wordle = () => {
         setWordMeaning(meaning);
 
         setGameStatus('playing');
+        setTodayGamePlayed(false);
         resetGame();
       } else {
         console.error('Invalid API response:', data);
@@ -218,13 +367,15 @@ const Wordle = () => {
       setWordMeaning(meaning);
 
       setGameStatus('playing');
+      setTodayGamePlayed(false);
       resetGame();
     }
   };
 
-  // Load game history on component mount
+  // Load game history and streak on component mount
   useEffect(() => {
     loadGameHistory();
+    loadStreakData();
     fetchTodaysWord();
   }, []);
 
@@ -247,6 +398,7 @@ const Wordle = () => {
       setWordMeaning(meaning);
 
       setCustomWord('');
+      setTodayGamePlayed(false);
       resetGame();
     }
   };
@@ -296,6 +448,7 @@ const Wordle = () => {
       }
     });
     setUsedLetters(newUsedLetters);
+    return newUsedLetters;
   };
 
   const submitGuess = async () => {
@@ -314,9 +467,9 @@ const Wordle = () => {
       const result = checkGuess(currentGuess);
       const newGuess = { word: currentGuess, result };
       const newGuesses = [...guesses, newGuess];
+      const newUsedLetters = updateUsedLetters(currentGuess, result);
 
       setGuesses(newGuesses);
-      updateUsedLetters(currentGuess, result);
       setGameStatus('won');
       setCurrentGuess('');
 
@@ -329,6 +482,19 @@ const Wordle = () => {
         timestamp: Date.now()
       };
       saveGameResult(gameResult);
+
+      // Save today's session only if it was today's word
+      if (!todayGamePlayed) {
+        const sessionData = {
+          date: getTodayDateString(),
+          targetWord: targetWord,
+          guesses: newGuesses,
+          usedLetters: newUsedLetters,
+          gameStatus: 'won'
+        };
+        saveTodayGameSession(sessionData);
+        setTodayGamePlayed(true);
+      }
       return;
     }
 
@@ -355,9 +521,9 @@ const Wordle = () => {
     const result = checkGuess(currentGuess);
     const newGuess = { word: currentGuess, result };
     const newGuesses = [...guesses, newGuess];
+    const newUsedLetters = updateUsedLetters(currentGuess, result);
 
     setGuesses(newGuesses);
-    updateUsedLetters(currentGuess, result);
 
     if (currentGuess === targetWord) {
       setGameStatus('won');
@@ -370,6 +536,19 @@ const Wordle = () => {
         timestamp: Date.now()
       };
       saveGameResult(gameResult);
+
+      // Save today's session only if it was today's word
+      if (!todayGamePlayed) {
+        const sessionData = {
+          date: getTodayDateString(),
+          targetWord: targetWord,
+          guesses: newGuesses,
+          usedLetters: newUsedLetters,
+          gameStatus: 'won'
+        };
+        saveTodayGameSession(sessionData);
+        setTodayGamePlayed(true);
+      }
     } else if (newGuesses.length >= maxGuesses) {
       setGameStatus('lost');
       // Save game result
@@ -381,6 +560,19 @@ const Wordle = () => {
         timestamp: Date.now()
       };
       saveGameResult(gameResult);
+
+      // Save today's session only if it was today's word
+      if (!todayGamePlayed) {
+        const sessionData = {
+          date: getTodayDateString(),
+          targetWord: targetWord,
+          guesses: newGuesses,
+          usedLetters: newUsedLetters,
+          gameStatus: 'lost'
+        };
+        saveTodayGameSession(sessionData);
+        setTodayGamePlayed(true);
+      }
     }
 
     setCurrentGuess('');
@@ -468,6 +660,38 @@ const Wordle = () => {
             📊 Stats
           </button>
         </div>
+
+        {/* Streak Display - Always visible */}
+        <div className="mb-4 p-3 bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-300 rounded-lg shadow-sm">
+          <div className="flex justify-around items-center">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-orange-600">🔥 {currentStreak}</div>
+              <div className="text-xs text-gray-700 font-semibold">Current Streak</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-orange-500">🏆 {maxStreak}</div>
+              <div className="text-xs text-gray-700 font-semibold">Best Streak</div>
+            </div>
+          </div>
+          <div className="mt-2 text-center text-xs text-gray-600">
+            {todayGamePlayed ? 
+              "You've already played today's word! Try a new word." : 
+              "Win today's word to keep your streak alive!"
+            }
+          </div>
+        </div>
+
+        {/* Today's Game Played Notice */}
+        {todayGamePlayed && gameStatus !== 'playing' && (
+          <div className="mb-4 p-3 bg-blue-50 border-2 border-blue-300 rounded-lg text-center">
+            <div className="text-sm font-semibold text-blue-800">
+              📅 This was today's word
+            </div>
+            <div className="text-xs text-blue-600 mt-1">
+              Come back tomorrow for a new word, or click "New Word" to practice!
+            </div>
+          </div>
+        )}
 
         {/* Statistics Panel */}
         {showStats && (
@@ -592,10 +816,18 @@ const Wordle = () => {
                 {gameStatus === 'won' ? (
                   <div className="text-green-600 font-bold text-lg sm:text-xl">
                     🎉 Congratulations! You won! 🎉
+                    <div className="text-sm mt-2 text-orange-600">
+                      Streak: {currentStreak} day{currentStreak !== 1 ? 's' : ''}! 🔥
+                    </div>
                   </div>
                 ) : (
                   <div className="text-red-600 font-bold text-lg sm:text-xl">
                     😔 Game Over! The word was: {targetWord}
+                    {currentStreak > 0 && (
+                      <div className="text-sm mt-2 text-gray-600">
+                        Your streak has been reset. Try again tomorrow!
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -623,7 +855,9 @@ const Wordle = () => {
                         <span className="text-blue-800 ml-1">
                           {meaning.definition}
                           {meaning.example && (
-                            <div><strong>Example:</strong> {meaning.example}</div>
+                            <div className="text-xs mt-1 italic text-blue-600">
+                              <strong>Example:</strong> {meaning.example}
+                            </div>
                           )}
                         </span>
                       </div>
