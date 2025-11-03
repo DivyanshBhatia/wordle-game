@@ -16,7 +16,9 @@ const Wordle = () => {
   const [showStats, setShowStats] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(0);
   const [maxStreak, setMaxStreak] = useState(0);
-  const [todayGamePlayed, setTodayGamePlayed] = useState(false);
+  const [isPlayingTodayWord, setIsPlayingTodayWord] = useState(true);
+  const [todayWordCompleted, setTodayWordCompleted] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
 
   const maxGuesses = 6;
   const wordLength = 5;
@@ -39,6 +41,21 @@ const Wordle = () => {
     document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
   };
 
+  // Load dark mode preference
+  useEffect(() => {
+    const savedTheme = getCookie('wordleTheme');
+    if (savedTheme === 'dark') {
+      setDarkMode(true);
+    }
+  }, []);
+
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    const newMode = !darkMode;
+    setDarkMode(newMode);
+    setCookie('wordleTheme', newMode ? 'dark' : 'light', 365);
+  };
+
   const getTodayDateString = () => {
     return new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
   };
@@ -56,7 +73,7 @@ const Wordle = () => {
       try {
         const data = JSON.parse(decodeURIComponent(sessionData));
         const today = getTodayDateString();
-        
+
         // Check if session is for today
         if (data.date === today) {
           return data;
@@ -199,8 +216,10 @@ const Wordle = () => {
     setCookie('wordleHistory', encodeURIComponent(JSON.stringify(newHistory)));
     setCookie('wordleHistoryDate', today);
 
-    // Update streak based on result
-    updateStreak(result.won);
+    // Update streak based on result only if playing today's word
+    if (isPlayingTodayWord) {
+      updateStreak(result.won);
+    }
   };
 
   const getGameStats = (history) => {
@@ -250,11 +269,14 @@ const Wordle = () => {
   };
 
   const restoreTodaySession = async (session) => {
+    console.log('Restoring session:', session);
     setTargetWord(session.targetWord);
     setGuesses(session.guesses);
     setUsedLetters(session.usedLetters);
     setGameStatus(session.gameStatus);
-    setTodayGamePlayed(true);
+    setIsPlayingTodayWord(true);
+    setTodayWordCompleted(session.gameStatus === 'won' || session.gameStatus === 'lost');
+    setCurrentGuess(''); // Clear any current guess
 
     // Fetch meaning for the word
     const meaning = await fetchWordMeaning(session.targetWord);
@@ -265,8 +287,8 @@ const Wordle = () => {
     try {
       setGameStatus('loading');
       setError('');
-      
-      // Check if today's game was already played
+
+      // Check if today's game session exists
       const todaySession = getTodayGameSession();
       if (todaySession) {
         console.log('Restoring today\'s session:', todaySession);
@@ -294,7 +316,8 @@ const Wordle = () => {
         setWordMeaning(meaning);
 
         setGameStatus('playing');
-        setTodayGamePlayed(false);
+        setIsPlayingTodayWord(true);
+        setTodayWordCompleted(false);
         resetGame();
       } else {
         console.error('Invalid API response:', data);
@@ -319,7 +342,8 @@ const Wordle = () => {
       });
 
       setGameStatus('playing');
-      setTodayGamePlayed(false);
+      setIsPlayingTodayWord(true);
+      setTodayWordCompleted(false);
       resetGame();
     }
   };
@@ -348,7 +372,8 @@ const Wordle = () => {
         setWordMeaning(meaning);
 
         setGameStatus('playing');
-        setTodayGamePlayed(false);
+        setIsPlayingTodayWord(false); // Mark as practice word
+        setTodayWordCompleted(false);
         resetGame();
       } else {
         console.error('Invalid API response:', data);
@@ -367,7 +392,8 @@ const Wordle = () => {
       setWordMeaning(meaning);
 
       setGameStatus('playing');
-      setTodayGamePlayed(false);
+      setIsPlayingTodayWord(false); // Mark as practice word
+      setTodayWordCompleted(false);
       resetGame();
     }
   };
@@ -398,7 +424,8 @@ const Wordle = () => {
       setWordMeaning(meaning);
 
       setCustomWord('');
-      setTodayGamePlayed(false);
+      setIsPlayingTodayWord(false); // Custom word is practice
+      setTodayWordCompleted(false);
       resetGame();
     }
   };
@@ -483,8 +510,8 @@ const Wordle = () => {
       };
       saveGameResult(gameResult);
 
-      // Save today's session only if it was today's word
-      if (!todayGamePlayed) {
+      // Save today's session only if playing today's word
+      if (isPlayingTodayWord) {
         const sessionData = {
           date: getTodayDateString(),
           targetWord: targetWord,
@@ -493,7 +520,7 @@ const Wordle = () => {
           gameStatus: 'won'
         };
         saveTodayGameSession(sessionData);
-        setTodayGamePlayed(true);
+        setTodayWordCompleted(true);
       }
       return;
     }
@@ -537,8 +564,8 @@ const Wordle = () => {
       };
       saveGameResult(gameResult);
 
-      // Save today's session only if it was today's word
-      if (!todayGamePlayed) {
+      // Save today's session only if playing today's word
+      if (isPlayingTodayWord) {
         const sessionData = {
           date: getTodayDateString(),
           targetWord: targetWord,
@@ -547,7 +574,7 @@ const Wordle = () => {
           gameStatus: 'won'
         };
         saveTodayGameSession(sessionData);
-        setTodayGamePlayed(true);
+        setTodayWordCompleted(true);
       }
     } else if (newGuesses.length >= maxGuesses) {
       setGameStatus('lost');
@@ -561,8 +588,8 @@ const Wordle = () => {
       };
       saveGameResult(gameResult);
 
-      // Save today's session only if it was today's word
-      if (!todayGamePlayed) {
+      // Save today's session only if playing today's word
+      if (isPlayingTodayWord) {
         const sessionData = {
           date: getTodayDateString(),
           targetWord: targetWord,
@@ -571,7 +598,19 @@ const Wordle = () => {
           gameStatus: 'lost'
         };
         saveTodayGameSession(sessionData);
-        setTodayGamePlayed(true);
+        setTodayWordCompleted(true);
+      }
+    } else {
+      // Game still in progress - save session if playing today's word
+      if (isPlayingTodayWord) {
+        const sessionData = {
+          date: getTodayDateString(),
+          targetWord: targetWord,
+          guesses: newGuesses,
+          usedLetters: newUsedLetters,
+          gameStatus: 'playing'
+        };
+        saveTodayGameSession(sessionData);
       }
     }
 
@@ -605,9 +644,9 @@ const Wordle = () => {
       case 'present':
         return `${baseStyle} bg-yellow-500 border-yellow-500 text-white`;
       case 'absent':
-        return `${baseStyle} bg-gray-500 border-gray-500 text-white`;
+        return `${baseStyle} ${darkMode ? 'bg-gray-700 border-gray-700' : 'bg-gray-500 border-gray-500'} text-white`;
       default:
-        return `${baseStyle} bg-gray-100 border-gray-300 ${hasLetter ? 'text-black border-gray-500' : 'text-black'}`;
+        return `${baseStyle} ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300'} ${hasLetter ? (darkMode ? 'text-white border-gray-400' : 'text-black border-gray-500') : (darkMode ? 'text-white' : 'text-black')}`;
     }
   };
 
@@ -620,9 +659,9 @@ const Wordle = () => {
       case 'present':
         return `${baseStyle} bg-yellow-500 text-white`;
       case 'absent':
-        return `${baseStyle} bg-gray-500 text-white`;
+        return `${baseStyle} ${darkMode ? 'bg-gray-700' : 'bg-gray-500'} text-white`;
       default:
-        return `${baseStyle} bg-gray-200 text-black`;
+        return `${baseStyle} ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-black'}`;
     }
   };
 
@@ -649,45 +688,74 @@ const Wordle = () => {
   const stats = getGameStats(gameHistory);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-2 sm:p-4">
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} flex flex-col items-center justify-center p-2 sm:p-4 transition-colors duration-300`}>
       <div className="max-w-md w-full px-2 sm:px-0">
         <div className="flex justify-between items-center mb-6 sm:mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-800">Wordle</h1>
-          <button
-            onClick={() => setShowStats(!showStats)}
-            className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm font-semibold"
-          >
-            📊 Stats
-          </button>
+          <h1 className={`text-3xl sm:text-4xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Wordle</h1>
+          <div className="flex gap-2">
+            <button
+              onClick={toggleDarkMode}
+              className={`px-3 py-2 rounded hover:opacity-80 text-sm font-semibold transition-all ${
+                darkMode ? 'bg-gray-700 text-yellow-300' : 'bg-gray-200 text-gray-800'
+              }`}
+              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {darkMode ? '☀️' : '🌙'}
+            </button>
+            <button
+              onClick={() => setShowStats(!showStats)}
+              className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm font-semibold"
+            >
+              📊 Stats
+            </button>
+          </div>
         </div>
 
         {/* Streak Display - Always visible */}
-        <div className="mb-4 p-3 bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-300 rounded-lg shadow-sm">
+        <div className={`mb-4 p-3 rounded-lg shadow-sm ${
+          darkMode
+            ? 'bg-gradient-to-r from-orange-900 to-yellow-900 border-2 border-orange-600'
+            : 'bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-300'
+        }`}>
           <div className="flex justify-around items-center">
             <div className="text-center">
-              <div className="text-3xl font-bold text-orange-600">🔥 {currentStreak}</div>
-              <div className="text-xs text-gray-700 font-semibold">Current Streak</div>
+              <div className={`text-3xl font-bold ${darkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+                🔥 {currentStreak}
+              </div>
+              <div className={`text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                Current Streak
+              </div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-orange-500">🏆 {maxStreak}</div>
-              <div className="text-xs text-gray-700 font-semibold">Best Streak</div>
+              <div className={`text-3xl font-bold ${darkMode ? 'text-orange-300' : 'text-orange-500'}`}>
+                🏆 {maxStreak}
+              </div>
+              <div className={`text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                Best Streak
+              </div>
             </div>
           </div>
-          <div className="mt-2 text-center text-xs text-gray-600">
-            {todayGamePlayed ? 
-              "You've already played today's word! Try a new word." : 
-              "Win today's word to keep your streak alive!"
+          <div className={`mt-2 text-center text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            {todayWordCompleted ?
+              "You've completed today's word! Come back tomorrow." :
+              isPlayingTodayWord ?
+              "Win today's word to keep your streak alive!" :
+              "Practice mode - doesn't affect your streak"
             }
           </div>
         </div>
 
-        {/* Today's Game Played Notice */}
-        {todayGamePlayed && gameStatus !== 'playing' && (
-          <div className="mb-4 p-3 bg-blue-50 border-2 border-blue-300 rounded-lg text-center">
-            <div className="text-sm font-semibold text-blue-800">
+        {/* Today's Game Completed Notice - Only show when today's word is completed */}
+        {isPlayingTodayWord && todayWordCompleted && gameStatus !== 'playing' && (
+          <div className={`mb-4 p-3 rounded-lg text-center ${
+            darkMode
+              ? 'bg-blue-900 border-2 border-blue-600'
+              : 'bg-blue-50 border-2 border-blue-300'
+          }`}>
+            <div className={`text-sm font-semibold ${darkMode ? 'text-blue-300' : 'text-blue-800'}`}>
               📅 This was today's word
             </div>
-            <div className="text-xs text-blue-600 mt-1">
+            <div className={`text-xs mt-1 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
               Come back tomorrow for a new word, or click "New Word" to practice!
             </div>
           </div>
@@ -695,35 +763,43 @@ const Wordle = () => {
 
         {/* Statistics Panel */}
         {showStats && (
-          <div className="mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
-            <h2 className="text-xl font-bold mb-4 text-center">Today's Statistics</h2>
+          <div className={`mb-6 p-4 rounded-lg shadow-sm ${
+            darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            <h2 className={`text-xl font-bold mb-4 text-center ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+              Today's Statistics
+            </h2>
             <div className="grid grid-cols-4 gap-4 text-center mb-4">
               <div>
                 <div className="text-2xl font-bold text-blue-600">{stats.totalGames}</div>
-                <div className="text-xs text-gray-600">Games</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Games</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-green-600">{stats.wins}</div>
-                <div className="text-xs text-gray-600">Wins</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Wins</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-red-600">{stats.losses}</div>
-                <div className="text-xs text-gray-600">Losses</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Losses</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-purple-600">{stats.winPercentage}%</div>
-                <div className="text-xs text-gray-600">Win Rate</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Win Rate</div>
               </div>
             </div>
 
             {stats.totalGames > 0 && (
               <>
                 <div className="mb-4">
-                  <h3 className="text-sm font-semibold mb-2">Guess Distribution</h3>
+                  <h3 className={`text-sm font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                    Guess Distribution
+                  </h3>
                   {stats.guessDistribution.map((count, index) => (
                     <div key={index} className="flex items-center mb-1">
-                      <span className="text-xs w-4">{index + 1}</span>
-                      <div className="flex-1 mx-2 bg-gray-200 rounded">
+                      <span className={`text-xs w-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {index + 1}
+                      </span>
+                      <div className={`flex-1 mx-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
                         <div
                           className="bg-green-500 text-white text-xs text-center rounded px-1"
                           style={{ width: `${stats.wins > 0 ? (count / stats.wins) * 100 : 0}%`, minWidth: count > 0 ? '20px' : '0' }}
@@ -736,11 +812,17 @@ const Wordle = () => {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold mb-2">Recent Games</h3>
+                  <h3 className={`text-sm font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                    Recent Games
+                  </h3>
                   <div className="space-y-1 max-h-32 overflow-y-auto">
                     {gameHistory.slice(-5).reverse().map((game, index) => (
-                      <div key={index} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded">
-                        <span className="font-mono">{game.word}</span>
+                      <div key={index} className={`flex justify-between items-center text-xs p-2 rounded ${
+                        darkMode ? 'bg-gray-700' : 'bg-gray-50'
+                      }`}>
+                        <span className={`font-mono ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                          {game.word}
+                        </span>
                         <span className={`font-semibold ${game.won ? 'text-green-600' : 'text-red-600'}`}>
                           {game.won ? `✓ ${game.guesses}/6` : '✗ Lost'}
                         </span>
@@ -756,13 +838,19 @@ const Wordle = () => {
         {/* Loading State */}
         {gameStatus === 'loading' && (
           <div className="text-center mb-6">
-            <div className="text-base sm:text-lg font-semibold">Loading word...</div>
+            <div className={`text-base sm:text-lg font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+              Loading word...
+            </div>
           </div>
         )}
 
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded text-sm">
+          <div className={`mb-4 p-3 rounded text-sm ${
+            darkMode
+              ? 'bg-yellow-900 border border-yellow-600 text-yellow-200'
+              : 'bg-yellow-100 border border-yellow-400 text-yellow-700'
+          }`}>
             {error}
           </div>
         )}
@@ -771,10 +859,16 @@ const Wordle = () => {
         {validationMessage && (
           <div className={`mb-4 p-3 rounded text-sm text-center font-semibold ${
             validationMessage.includes('valid English word')
-              ? 'bg-red-100 border border-red-400 text-red-700'
+              ? darkMode
+                ? 'bg-red-900 border border-red-600 text-red-200'
+                : 'bg-red-100 border border-red-400 text-red-700'
               : validationMessage.includes('Checking word')
-              ? 'bg-blue-100 border border-blue-400 text-blue-700'
-              : 'bg-orange-100 border border-orange-400 text-orange-700'
+              ? darkMode
+                ? 'bg-blue-900 border border-blue-600 text-blue-200'
+                : 'bg-blue-100 border border-blue-400 text-blue-700'
+              : darkMode
+                ? 'bg-orange-900 border border-orange-600 text-orange-200'
+                : 'bg-orange-100 border border-orange-400 text-orange-700'
           }`}>
             {validationMessage}
           </div>
@@ -793,7 +887,7 @@ const Wordle = () => {
                     if (rowIndex < guesses.length) {
                       letter = guesses[rowIndex].word[colIndex];
                       status = guesses[rowIndex].result[colIndex];
-                    } else if (rowIndex === guesses.length) {
+                    } else if (rowIndex === guesses.length && gameStatus === 'playing') {
                       letter = currentGuess[colIndex] || '';
                     }
 
@@ -816,15 +910,17 @@ const Wordle = () => {
                 {gameStatus === 'won' ? (
                   <div className="text-green-600 font-bold text-lg sm:text-xl">
                     🎉 Congratulations! You won! 🎉
-                    <div className="text-sm mt-2 text-orange-600">
-                      Streak: {currentStreak} day{currentStreak !== 1 ? 's' : ''}! 🔥
-                    </div>
+                    {isPlayingTodayWord && (
+                      <div className="text-sm mt-2 text-orange-600">
+                        Streak: {currentStreak} day{currentStreak !== 1 ? 's' : ''}! 🔥
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-red-600 font-bold text-lg sm:text-xl">
                     😔 Game Over! The word was: {targetWord}
-                    {currentStreak > 0 && (
-                      <div className="text-sm mt-2 text-gray-600">
+                    {isPlayingTodayWord && currentStreak > 0 && (
+                      <div className={`text-sm mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         Your streak has been reset. Try again tomorrow!
                       </div>
                     )}
@@ -833,29 +929,43 @@ const Wordle = () => {
 
                 {/* Word Meaning Display - Only show when game is over (won OR lost) AND meaning exists */}
                 {(gameStatus === 'won' || gameStatus === 'lost') && wordMeaning && (
-                  <div className="mt-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg text-left">
-                    <h3 className="font-bold text-base sm:text-lg text-blue-800 mb-2">
+                  <div className={`mt-4 p-3 sm:p-4 rounded-lg text-left ${
+                    darkMode
+                      ? 'bg-blue-900 border border-blue-700'
+                      : 'bg-blue-50 border border-blue-200'
+                  }`}>
+                    <h3 className={`font-bold text-base sm:text-lg mb-2 ${
+                      darkMode ? 'text-blue-300' : 'text-blue-800'
+                    }`}>
                       Word: {wordMeaning.word}
                       {wordMeaning.phonetic && (
-                        <span className="text-xs sm:text-sm font-normal text-blue-600 ml-2">
+                        <span className={`text-xs sm:text-sm font-normal ml-2 ${
+                          darkMode ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
                           {wordMeaning.phonetic}
                         </span>
                       )}
                       {wordMeaning.hindi_translation && (
-                        <span className="text-sm font-normal text-blue-600 ml-2">
+                        <span className={`text-sm font-normal ml-2 ${
+                          darkMode ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
                           {wordMeaning.hindi_translation}
                         </span>
                       )}
                     </h3>
                     {wordMeaning.meanings && wordMeaning.meanings.map((meaning, index) => (
                       <div key={index} className="mb-2 text-sm sm:text-base">
-                        <span className="font-semibold text-blue-700 capitalize">
+                        <span className={`font-semibold capitalize ${
+                          darkMode ? 'text-blue-400' : 'text-blue-700'
+                        }`}>
                           {meaning.partOfSpeech}:
                         </span>
-                        <span className="text-blue-800 ml-1">
+                        <span className={`ml-1 ${darkMode ? 'text-blue-200' : 'text-blue-800'}`}>
                           {meaning.definition}
                           {meaning.example && (
-                            <div className="text-xs mt-1 italic text-blue-600">
+                            <div className={`text-xs mt-1 italic ${
+                              darkMode ? 'text-blue-300' : 'text-blue-600'
+                            }`}>
                               <strong>Example:</strong> {meaning.example}
                             </div>
                           )}
@@ -866,18 +976,29 @@ const Wordle = () => {
                 )}
 
                 <div className="mt-4 space-x-2">
-                  <button
-                    onClick={resetGame}
-                    className="px-3 sm:px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm sm:text-base"
-                  >
-                    Play Again
-                  </button>
-                  <button
-                    onClick={fetchNewWord}
-                    className="px-3 sm:px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm sm:text-base"
-                  >
-                    New Word
-                  </button>
+                  {isPlayingTodayWord && todayWordCompleted ? (
+                    <button
+                      onClick={fetchNewWord}
+                      className="px-3 sm:px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm sm:text-base"
+                    >
+                      Practice with New Word
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={resetGame}
+                        className="px-3 sm:px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm sm:text-base"
+                      >
+                        Play Again
+                      </button>
+                      <button
+                        onClick={fetchNewWord}
+                        className="px-3 sm:px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm sm:text-base"
+                      >
+                        New Word
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -902,7 +1023,9 @@ const Wordle = () => {
               ))}
             </div>
 
-            <div className="text-center mt-3 sm:mt-4 text-xs sm:text-sm text-gray-600">
+            <div className={`text-center mt-3 sm:mt-4 text-xs sm:text-sm ${
+              darkMode ? 'text-gray-400' : 'text-gray-600'
+            }`}>
               Use your keyboard or click the letters above to play!
             </div>
           </>
