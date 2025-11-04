@@ -19,6 +19,8 @@ const Wordle = () => {
   const [isPlayingTodayWord, setIsPlayingTodayWord] = useState(true);
   const [todayWordCompleted, setTodayWordCompleted] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [showTodayModal, setShowTodayModal] = useState(false);
+  const [todayGameData, setTodayGameData] = useState(null);
 
   const maxGuesses = 6;
   const wordLength = 5;
@@ -54,6 +56,22 @@ const Wordle = () => {
     const newMode = !darkMode;
     setDarkMode(newMode);
     setCookie('wordleTheme', newMode ? 'dark' : 'light', 365);
+  };
+
+  const handleShowTodayResult = async () => {
+    const todaySession = getTodayGameSession();
+    if (todaySession && (todaySession.gameStatus === 'won' || todaySession.gameStatus === 'lost')) {
+      // Fetch meaning if not already loaded
+      const meaning = wordMeaning || await fetchWordMeaning(todaySession.targetWord);
+
+      setTodayGameData({
+        targetWord: todaySession.targetWord,
+        guesses: todaySession.guesses,
+        gameStatus: todaySession.gameStatus,
+        meaning: meaning
+      });
+      setShowTodayModal(true);
+    }
   };
 
   const getTodayDateString = () => {
@@ -281,6 +299,16 @@ const Wordle = () => {
     // Fetch meaning for the word
     const meaning = await fetchWordMeaning(session.targetWord);
     setWordMeaning(meaning);
+
+    // Save today's game data for modal display (if game is completed)
+    if (session.gameStatus === 'won' || session.gameStatus === 'lost') {
+      setTodayGameData({
+        targetWord: session.targetWord,
+        guesses: session.guesses,
+        gameStatus: session.gameStatus,
+        meaning: meaning
+      });
+    }
   };
 
   const fetchTodaysWord = async () => {
@@ -521,6 +549,14 @@ const Wordle = () => {
         };
         saveTodayGameSession(sessionData);
         setTodayWordCompleted(true);
+
+        // Save today's game data for modal display
+        setTodayGameData({
+          targetWord: targetWord,
+          guesses: newGuesses,
+          gameStatus: 'won',
+          meaning: wordMeaning
+        });
       }
       return;
     }
@@ -575,6 +611,14 @@ const Wordle = () => {
         };
         saveTodayGameSession(sessionData);
         setTodayWordCompleted(true);
+
+        // Save today's game data for modal display
+        setTodayGameData({
+          targetWord: targetWord,
+          guesses: newGuesses,
+          gameStatus: 'won',
+          meaning: wordMeaning
+        });
       }
     } else if (newGuesses.length >= maxGuesses) {
       setGameStatus('lost');
@@ -599,6 +643,14 @@ const Wordle = () => {
         };
         saveTodayGameSession(sessionData);
         setTodayWordCompleted(true);
+
+        // Save today's game data for modal display
+        setTodayGameData({
+          targetWord: targetWord,
+          guesses: newGuesses,
+          gameStatus: 'lost',
+          meaning: wordMeaning
+        });
       }
     } else {
       // Game still in progress - save session if playing today's word
@@ -693,6 +745,20 @@ const Wordle = () => {
         <div className="flex justify-between items-center mb-6 sm:mb-8">
           <h1 className={`text-3xl sm:text-4xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Wordle</h1>
           <div className="flex gap-2">
+            <button
+              onClick={handleShowTodayResult}
+              disabled={!todayWordCompleted}
+              className={`px-3 py-2 rounded text-sm font-semibold transition-all ${
+                todayWordCompleted
+                  ? 'bg-purple-500 text-white hover:bg-purple-600 cursor-pointer'
+                  : darkMode
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+              title={todayWordCompleted ? "View Today's Result" : "Complete today's word first"}
+            >
+              📋 Today
+            </button>
             <button
               onClick={toggleDarkMode}
               className={`px-3 py-2 rounded hover:opacity-80 text-sm font-semibold transition-all ${
@@ -832,6 +898,130 @@ const Wordle = () => {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Today's Result Modal */}
+        {showTodayModal && todayGameData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowTodayModal(false)}>
+            <div
+              className={`max-w-md w-full rounded-lg shadow-2xl p-4 sm:p-6 max-h-[90vh] overflow-y-auto ${
+                darkMode ? 'bg-gray-800' : 'bg-white'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className={`text-xl sm:text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+                  📅 Today's Result
+                </h2>
+                <button
+                  onClick={() => setShowTodayModal(false)}
+                  className={`text-2xl font-bold ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-800'}`}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Game Result Status */}
+              <div className="text-center mb-4">
+                {todayGameData.gameStatus === 'won' ? (
+                  <div className="text-green-600 font-bold text-lg">
+                    🎉 You Won! 🎉
+                    <div className="text-sm mt-1">
+                      Solved in {todayGameData.guesses.length}/{maxGuesses} attempts
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-red-600 font-bold text-lg">
+                    😔 Game Over
+                    <div className="text-sm mt-1">
+                      The word was: {todayGameData.targetWord}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Game Board */}
+              <div className="grid grid-rows-6 gap-1 sm:gap-2 mb-4">
+                {Array.from({ length: maxGuesses }).map((_, rowIndex) => (
+                  <div key={rowIndex} className="grid grid-cols-5 gap-1 sm:gap-2">
+                    {Array.from({ length: wordLength }).map((_, colIndex) => {
+                      let letter = '';
+                      let status = '';
+
+                      if (rowIndex < todayGameData.guesses.length) {
+                        letter = todayGameData.guesses[rowIndex].word[colIndex];
+                        status = todayGameData.guesses[rowIndex].result[colIndex];
+                      }
+
+                      return (
+                        <div
+                          key={colIndex}
+                          className={getCellStyle(status, !!letter)}
+                        >
+                          {letter}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              {/* Word Meaning */}
+              {todayGameData.meaning && (
+                <div className={`p-3 sm:p-4 rounded-lg ${
+                  darkMode
+                    ? 'bg-blue-900 border border-blue-700'
+                    : 'bg-blue-50 border border-blue-200'
+                }`}>
+                  <h3 className={`font-bold text-base sm:text-lg mb-2 ${
+                    darkMode ? 'text-blue-300' : 'text-blue-800'
+                  }`}>
+                    Word: {todayGameData.meaning.word}
+                    {todayGameData.meaning.phonetic && (
+                      <span className={`text-xs sm:text-sm font-normal ml-2 ${
+                        darkMode ? 'text-blue-400' : 'text-blue-600'
+                      }`}>
+                        {todayGameData.meaning.phonetic}
+                      </span>
+                    )}
+                    {todayGameData.meaning.hindi_translation && (
+                      <span className={`text-sm font-normal ml-2 ${
+                        darkMode ? 'text-blue-400' : 'text-blue-600'
+                      }`}>
+                        {todayGameData.meaning.hindi_translation}
+                      </span>
+                    )}
+                  </h3>
+                  {todayGameData.meaning.meanings && todayGameData.meaning.meanings.map((meaning, index) => (
+                    <div key={index} className="mb-2 text-sm sm:text-base">
+                      <span className={`font-semibold capitalize ${
+                        darkMode ? 'text-blue-400' : 'text-blue-700'
+                      }`}>
+                        {meaning.partOfSpeech}:
+                      </span>
+                      <span className={`ml-1 ${darkMode ? 'text-blue-200' : 'text-blue-800'}`}>
+                        {meaning.definition}
+                        {meaning.example && (
+                          <div className={`text-xs mt-1 italic ${
+                            darkMode ? 'text-blue-300' : 'text-blue-600'
+                          }`}>
+                            <strong>Example:</strong> {meaning.example}
+                          </div>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowTodayModal(false)}
+                className="w-full mt-4 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 font-semibold"
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
 
