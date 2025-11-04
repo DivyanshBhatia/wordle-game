@@ -58,11 +58,16 @@ const Wordle = () => {
     setCookie('wordleTheme', newMode ? 'dark' : 'light', 365);
   };
 
+  const isTodayWordCompleted = () => {
+    const todaySession = getTodayGameSession();
+    return todaySession && (todaySession.gameStatus === 'won' || todaySession.gameStatus === 'lost');
+  };
+
   const handleShowTodayResult = async () => {
     const todaySession = getTodayGameSession();
     if (todaySession && (todaySession.gameStatus === 'won' || todaySession.gameStatus === 'lost')) {
       // Fetch meaning if not already loaded
-      const meaning = wordMeaning || await fetchWordMeaning(todaySession.targetWord);
+      const meaning = await fetchWordMeaning(todaySession.targetWord);
 
       setTodayGameData({
         targetWord: todaySession.targetWord,
@@ -747,15 +752,15 @@ const Wordle = () => {
           <div className="flex gap-2">
             <button
               onClick={handleShowTodayResult}
-              disabled={!todayWordCompleted}
+              disabled={!isTodayWordCompleted()}
               className={`px-3 py-2 rounded text-sm font-semibold transition-all ${
-                todayWordCompleted
+                isTodayWordCompleted()
                   ? 'bg-purple-500 text-white hover:bg-purple-600 cursor-pointer'
                   : darkMode
                     ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
-              title={todayWordCompleted ? "View Today's Result" : "Complete today's word first"}
+              title={isTodayWordCompleted() ? "View Today's Result" : "Complete today's word first"}
             >
               📋 Today
             </button>
@@ -802,7 +807,7 @@ const Wordle = () => {
             </div>
           </div>
           <div className={`mt-2 text-center text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            {todayWordCompleted ?
+            {isTodayWordCompleted() ?
               "You've completed today's word! Come back tomorrow." :
               isPlayingTodayWord ?
               "Win today's word to keep your streak alive!" :
@@ -812,7 +817,7 @@ const Wordle = () => {
         </div>
 
         {/* Today's Game Completed Notice - Only show when today's word is completed */}
-        {isPlayingTodayWord && todayWordCompleted && gameStatus !== 'playing' && (
+        {isPlayingTodayWord && isTodayWordCompleted() && gameStatus !== 'playing' && (
           <div className={`mb-4 p-3 rounded-lg text-center ${
             darkMode
               ? 'bg-blue-900 border-2 border-blue-600'
@@ -823,6 +828,22 @@ const Wordle = () => {
             </div>
             <div className={`text-xs mt-1 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
               Come back tomorrow for a new word, or click "New Word" to practice!
+            </div>
+          </div>
+        )}
+
+        {/* Practice Mode Notice - Show when playing practice word after completing today's word */}
+        {!isPlayingTodayWord && isTodayWordCompleted() && gameStatus === 'playing' && (
+          <div className={`mb-4 p-3 rounded-lg text-center ${
+            darkMode
+              ? 'bg-green-900 border-2 border-green-600'
+              : 'bg-green-50 border-2 border-green-300'
+          }`}>
+            <div className={`text-sm font-semibold ${darkMode ? 'text-green-300' : 'text-green-800'}`}>
+              🎮 Practice Mode
+            </div>
+            <div className={`text-xs mt-1 ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
+              This game won't affect your streak. Click "📋 Today" to see your daily result!
             </div>
           </div>
         )}
@@ -1166,7 +1187,7 @@ const Wordle = () => {
                 )}
 
                 <div className="mt-4 space-x-2">
-                  {isPlayingTodayWord && todayWordCompleted ? (
+                  {isPlayingTodayWord && isTodayWordCompleted() ? (
                     <button
                       onClick={fetchNewWord}
                       className="px-3 sm:px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm sm:text-base"
