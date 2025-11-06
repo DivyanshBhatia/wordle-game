@@ -21,6 +21,16 @@ const Wordle = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [showTodayModal, setShowTodayModal] = useState(false);
   const [todayGameData, setTodayGameData] = useState(null);
+  const [showDailyStats, setShowDailyStats] = useState(false);
+  const [dailyWordStats, setDailyWordStats] = useState({
+    attempt1: 0,
+    attempt2: 0,
+    attempt3: 0,
+    attempt4: 0,
+    attempt5: 0,
+    attempt6: 0,
+    totalWins: 0
+  });
 
   const maxGuesses = 6;
   const wordLength = 5;
@@ -41,6 +51,54 @@ const Wordle = () => {
 
   const deleteCookie = (name) => {
     document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+  };
+
+  // Daily Word Stats Management
+  const loadDailyWordStats = () => {
+    const statsData = getCookie('wordleDailyWordStats');
+    if (statsData) {
+      try {
+        const stats = JSON.parse(decodeURIComponent(statsData));
+        setDailyWordStats(stats);
+        return stats;
+      } catch (error) {
+        console.error('Error parsing daily word stats:', error);
+        const defaultStats = {
+          attempt1: 0,
+          attempt2: 0,
+          attempt3: 0,
+          attempt4: 0,
+          attempt5: 0,
+          attempt6: 0,
+          totalWins: 0
+        };
+        setDailyWordStats(defaultStats);
+        return defaultStats;
+      }
+    }
+    return {
+      attempt1: 0,
+      attempt2: 0,
+      attempt3: 0,
+      attempt4: 0,
+      attempt5: 0,
+      attempt6: 0,
+      totalWins: 0
+    };
+  };
+
+  const updateDailyWordStats = (attemptsUsed) => {
+    const currentStats = loadDailyWordStats();
+    const attemptKey = `attempt${attemptsUsed}`;
+
+    const updatedStats = {
+      ...currentStats,
+      [attemptKey]: (currentStats[attemptKey] || 0) + 1,
+      totalWins: (currentStats.totalWins || 0) + 1
+    };
+
+    setCookie('wordleDailyWordStats', encodeURIComponent(JSON.stringify(updatedStats)), 365);
+    setDailyWordStats(updatedStats);
   };
 
   // Load dark mode preference
@@ -242,6 +300,11 @@ const Wordle = () => {
     // Update streak based on result only if playing today's word
     if (isPlayingTodayWord) {
       updateStreak(result.won);
+
+      // Update daily word stats if won
+      if (result.won) {
+        updateDailyWordStats(result.guesses);
+      }
     }
   };
 
@@ -431,10 +494,11 @@ const Wordle = () => {
     }
   };
 
-  // Load game history and streak on component mount
+  // Load game history, streak, and daily word stats on component mount
   useEffect(() => {
     loadGameHistory();
     loadStreakData();
+    loadDailyWordStats();
     fetchTodaysWord();
   }, []);
 
@@ -774,6 +838,13 @@ const Wordle = () => {
               {darkMode ? '☀️' : '🌙'}
             </button>
             <button
+              onClick={() => setShowDailyStats(!showDailyStats)}
+              className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm font-semibold"
+              title="Daily Word Lifetime Stats"
+            >
+              🏅 Daily
+            </button>
+            <button
               onClick={() => setShowStats(!showStats)}
               className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm font-semibold"
             >
@@ -845,6 +916,84 @@ const Wordle = () => {
             <div className={`text-xs mt-1 ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
               This game won't affect your streak. Click "📋 Today" to see your daily result!
             </div>
+          </div>
+        )}
+
+        {/* Daily Word Lifetime Statistics Panel */}
+        {showDailyStats && (
+          <div className={`mb-6 p-4 rounded-lg shadow-sm ${
+            darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            <h2 className={`text-xl font-bold mb-4 text-center ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+              🏅 Daily Word Lifetime Stats
+            </h2>
+            <div className={`text-center mb-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              Track your performance across all daily words
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-center mb-4">
+              <div className="col-span-2">
+                <div className="text-3xl font-bold text-green-600">{dailyWordStats.totalWins}</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Daily Wins</div>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <h3 className={`text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                Wins by Attempt
+              </h3>
+              {[1, 2, 3, 4, 5, 6].map((attemptNum) => {
+                const count = dailyWordStats[`attempt${attemptNum}`] || 0;
+                const percentage = dailyWordStats.totalWins > 0
+                  ? (count / dailyWordStats.totalWins) * 100
+                  : 0;
+
+                return (
+                  <div key={attemptNum} className="flex items-center mb-2">
+                    <span className={`text-sm w-12 font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {attemptNum} {attemptNum === 1 ? 'try' : 'tries'}
+                    </span>
+                    <div className={`flex-1 mx-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} h-8 relative overflow-hidden`}>
+                      <div
+                        className="bg-gradient-to-r from-green-500 to-green-600 h-full flex items-center justify-end px-2 transition-all duration-500 ease-out rounded"
+                        style={{
+                          width: `${Math.max(percentage, count > 0 ? 15 : 0)}%`,
+                        }}
+                      >
+                        {count > 0 && (
+                          <span className="text-white text-sm font-bold">
+                            {count}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className={`text-xs w-12 text-right ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {percentage > 0 ? percentage.toFixed(0) : 0}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {dailyWordStats.totalWins > 0 && (
+              <div className={`mt-4 p-3 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-50'} text-center`}>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Average Attempts: <span className="font-bold text-blue-600">
+                    {(
+                      ([1,2,3,4,5,6].reduce((sum, num) =>
+                        sum + (num * (dailyWordStats[`attempt${num}`] || 0)), 0
+                      )) / dailyWordStats.totalWins
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {dailyWordStats.totalWins === 0 && (
+              <div className={`text-center text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'} italic`}>
+                Complete daily words to see your stats here!
+              </div>
+            )}
           </div>
         )}
 
