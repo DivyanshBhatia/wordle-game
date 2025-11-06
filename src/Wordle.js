@@ -138,13 +138,24 @@ const Wordle = () => {
   };
 
   const getTodayDateString = () => {
-    return new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    // Get current date in Asia/Kolkata timezone
+    const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const kolkataDate = new Date(today);
+    const year = kolkataDate.getFullYear();
+    const month = String(kolkataDate.getMonth() + 1).padStart(2, '0');
+    const day = String(kolkataDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`; // YYYY-MM-DD format in IST
   };
 
   const getYesterdayDateString = () => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    return yesterday.toISOString().split('T')[0];
+    // Get yesterday's date in Asia/Kolkata timezone
+    const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const kolkataDate = new Date(today);
+    kolkataDate.setDate(kolkataDate.getDate() - 1);
+    const year = kolkataDate.getFullYear();
+    const month = String(kolkataDate.getMonth() + 1).padStart(2, '0');
+    const day = String(kolkataDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`; // YYYY-MM-DD format in IST
   };
 
   // Today's game session management
@@ -155,11 +166,11 @@ const Wordle = () => {
         const data = JSON.parse(decodeURIComponent(sessionData));
         const today = getTodayDateString();
 
-        // Check if session is for today
+        // Check if session is for today (in IST timezone)
         if (data.date === today) {
           return data;
         } else {
-          // Old session, clear it
+          // Old session (from before today's IST midnight), clear it
           deleteCookie('wordleTodaySession');
           return null;
         }
@@ -266,7 +277,7 @@ const Wordle = () => {
     const today = getTodayDateString();
 
     if (historyDate !== today) {
-      // Clear old history if date is different
+      // Clear old history if date is different (based on IST timezone)
       deleteCookie('wordleHistory');
       deleteCookie('wordleHistoryDate');
       setGameHistory([]);
@@ -384,7 +395,7 @@ const Wordle = () => {
       setGameStatus('loading');
       setError('');
 
-      // Check if today's game session exists
+      // Check if today's game session exists (based on IST timezone)
       const todaySession = getTodayGameSession();
       if (todaySession) {
         console.log('Restoring today\'s session:', todaySession);
