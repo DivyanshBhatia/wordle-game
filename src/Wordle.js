@@ -708,19 +708,19 @@ const Wordle = () => {
   };
 
   const getKeyStyle = (letter) => {
-    const baseStyle = "px-2 sm:px-3 py-3 sm:py-4 m-0.5 sm:m-1 rounded font-bold cursor-pointer transition-all duration-200 hover:opacity-80 text-sm sm:text-base";
-    const status = usedLetters[letter];
-    switch (status) {
-      case 'correct':
-        return `${baseStyle} bg-green-500 text-white`;
-      case 'present':
-        return `${baseStyle} bg-yellow-500 text-white`;
-      case 'absent':
-        return `${baseStyle} ${darkMode ? 'bg-gray-700' : 'bg-gray-500'} text-white`;
-      default:
-        return `${baseStyle} ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-black'}`;
-    }
-  };
+  const baseStyle = "px-2 sm:px-3 py-3 sm:py-4 m-0.5 sm:m-1 rounded font-bold cursor-pointer transition-all duration-200 hover:opacity-80 text-sm sm:text-base";
+  const status = usedLetters[letter];
+  switch (status) {
+    case 'correct':
+      return `${baseStyle} bg-green-500 text-white`;
+    case 'present':
+      return `${baseStyle} bg-yellow-500 text-white`;
+    case 'absent':
+      return `${baseStyle} ${darkMode ? 'bg-gray-900 text-gray-500' : 'bg-gray-500 text-white'}`;
+    default:
+      return `${baseStyle} ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-black'}`;
+  }
+};
 
   const handleKeyClick = (key) => {
     if (gameStatus !== 'playing' || isValidating) return;
