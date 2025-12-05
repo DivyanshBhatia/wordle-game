@@ -6,7 +6,7 @@ const Wordle = () => {
   const [customWord, setCustomWord] = useState('');
   const [guesses, setGuesses] = useState([]);
   const [currentGuess, setCurrentGuess] = useState('');
-  const [gameStatus, setGameStatus] = useState('loading');
+  const [gameStatus, setGameStatus] = useState('loading'); // 'loading', 'playing', 'won', 'lost'
   const [shake, setShake] = useState(false);
   const [usedLetters, setUsedLetters] = useState({});
   const [error, setError] = useState('');
@@ -35,7 +35,6 @@ const Wordle = () => {
   // Notification states
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationTime, setNotificationTime] = useState('09:00');
-  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState('default');
 
   const maxGuesses = 6;
@@ -58,144 +57,6 @@ const Wordle = () => {
   const deleteCookie = (name) => {
     document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
   };
-
-  // Notification management functions
-  const loadNotificationPreferences = () => {
-    const enabled = getCookie('wordleNotificationsEnabled') === 'true';
-    const time = getCookie('wordleNotificationTime') || '09:00';
-    setNotificationsEnabled(enabled);
-    setNotificationTime(time);
-
-    if ('Notification' in window) {
-      setNotificationPermission(Notification.permission);
-    }
-  };
-
-  const requestNotificationPermission = async () => {
-    if (!('Notification' in window)) {
-      alert('This browser does not support desktop notifications');
-      return false;
-    }
-
-    const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
-    return permission === 'granted';
-  };
-
-  const sendNotification = () => {
-    if (notificationPermission === 'granted' && notificationsEnabled) {
-      const todayCompleted = isTodayWordCompleted();
-
-      if (!todayCompleted) {
-        new Notification('Wordle Daily Reminder! 📝', {
-          body: "Don't forget to play today's word! Keep your streak going! 🔥",
-          icon: '📝',
-          badge: '📝',
-          tag: 'wordle-daily-reminder',
-          requireInteraction: false
-        });
-      }
-    }
-  };
-
-  const scheduleNotification = useCallback(() => {
-    if (!notificationsEnabled || notificationPermission !== 'granted') {
-      return;
-    }
-
-    const now = new Date();
-    const [hours, minutes] = notificationTime.split(':').map(Number);
-
-    // Create notification time for today
-    const scheduledTime = new Date();
-    scheduledTime.setHours(hours, minutes, 0, 0);
-
-    // If scheduled time has passed today, schedule for tomorrow
-    if (scheduledTime <= now) {
-      scheduledTime.setDate(scheduledTime.getDate() + 1);
-    }
-
-    const timeUntilNotification = scheduledTime - now;
-
-    // Clear any existing timeout
-    const existingTimeout = getCookie('wordleNotificationTimeout');
-    if (existingTimeout) {
-      clearTimeout(parseInt(existingTimeout));
-    }
-
-    // Schedule the notification
-    const timeoutId = setTimeout(() => {
-      sendNotification();
-      // Schedule next day's notification
-      scheduleNotification();
-    }, timeUntilNotification);
-
-    // Store timeout ID (though it won't persist across page refreshes)
-    setCookie('wordleNotificationTimeout', timeoutId.toString(), 1);
-  }, [notificationsEnabled, notificationTime, notificationPermission]);
-
-  const toggleNotifications = async () => {
-    if (!notificationsEnabled) {
-      // User wants to enable notifications
-      const granted = await requestNotificationPermission();
-      if (granted) {
-        setNotificationsEnabled(true);
-        setCookie('wordleNotificationsEnabled', 'true', 365);
-        scheduleNotification();
-      }
-    } else {
-      // User wants to disable notifications
-      setNotificationsEnabled(false);
-      setCookie('wordleNotificationsEnabled', 'false', 365);
-    }
-  };
-
-  const updateNotificationTime = (newTime) => {
-    setNotificationTime(newTime);
-    setCookie('wordleNotificationTime', newTime, 365);
-
-    if (notificationsEnabled && notificationPermission === 'granted') {
-      scheduleNotification();
-    }
-  };
-
-  // Load notification preferences on mount
-  useEffect(() => {
-    loadNotificationPreferences();
-  }, []);
-
-  // Schedule notifications when enabled and time changes
-  useEffect(() => {
-    if (notificationsEnabled && notificationPermission === 'granted') {
-      scheduleNotification();
-    }
-  }, [notificationsEnabled, notificationTime, notificationPermission, scheduleNotification]);
-
-  // Check for notification on page load (in case user opens the app at notification time)
-  useEffect(() => {
-    const checkAndNotify = () => {
-      if (notificationsEnabled && notificationPermission === 'granted') {
-        const lastNotificationDate = getCookie('wordleLastNotification');
-        const today = getTodayDateString();
-
-        // Only send notification once per day
-        if (lastNotificationDate !== today) {
-          const now = new Date();
-          const [hours, minutes] = notificationTime.split(':').map(Number);
-          const currentHour = now.getHours();
-          const currentMinute = now.getMinutes();
-
-          // Check if we're within 5 minutes of the notification time
-          if (currentHour === hours && Math.abs(currentMinute - minutes) <= 5) {
-            sendNotification();
-            setCookie('wordleLastNotification', today, 1);
-          }
-        }
-      }
-    };
-
-    checkAndNotify();
-  }, [notificationsEnabled, notificationTime, notificationPermission]);
 
   // Daily Word Stats Management
   const loadDailyWordStats = () => {
@@ -245,6 +106,98 @@ const Wordle = () => {
     setDailyWordStats(updatedStats);
   };
 
+  // Notification management functions
+  const loadNotificationPreferences = () => {
+    const enabled = getCookie('wordleNotificationsEnabled') === 'true';
+    const time = getCookie('wordleNotificationTime') || '09:00';
+    setNotificationsEnabled(enabled);
+    setNotificationTime(time);
+
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  };
+
+  const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      alert('This browser does not support desktop notifications');
+      return false;
+    }
+
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    return permission === 'granted';
+  };
+
+  const sendNotification = () => {
+    if (notificationPermission === 'granted' && notificationsEnabled) {
+      const todayCompleted = isTodayWordCompleted();
+
+      if (!todayCompleted) {
+        new Notification('Wordle Daily Reminder! 📝', {
+          body: "Don't forget to play today's word! Keep your streak going! 🔥",
+          icon: '📝',
+          badge: '📝',
+          tag: 'wordle-daily-reminder',
+          requireInteraction: false
+        });
+      }
+    }
+  };
+
+  const scheduleNotification = useCallback(() => {
+    if (!notificationsEnabled || notificationPermission !== 'granted') {
+      return;
+    }
+
+    const now = new Date();
+    const [hours, minutes] = notificationTime.split(':').map(Number);
+
+    const scheduledTime = new Date();
+    scheduledTime.setHours(hours, minutes, 0, 0);
+
+    if (scheduledTime <= now) {
+      scheduledTime.setDate(scheduledTime.getDate() + 1);
+    }
+
+    const timeUntilNotification = scheduledTime - now;
+
+    const existingTimeout = getCookie('wordleNotificationTimeout');
+    if (existingTimeout) {
+      clearTimeout(parseInt(existingTimeout));
+    }
+
+    const timeoutId = setTimeout(() => {
+      sendNotification();
+      scheduleNotification();
+    }, timeUntilNotification);
+
+    setCookie('wordleNotificationTimeout', timeoutId.toString(), 1);
+  }, [notificationsEnabled, notificationTime, notificationPermission]);
+
+  const toggleNotifications = async () => {
+    if (!notificationsEnabled) {
+      const granted = await requestNotificationPermission();
+      if (granted) {
+        setNotificationsEnabled(true);
+        setCookie('wordleNotificationsEnabled', 'true', 365);
+        scheduleNotification();
+      }
+    } else {
+      setNotificationsEnabled(false);
+      setCookie('wordleNotificationsEnabled', 'false', 365);
+    }
+  };
+
+  const updateNotificationTime = (newTime) => {
+    setNotificationTime(newTime);
+    setCookie('wordleNotificationTime', newTime, 365);
+
+    if (notificationsEnabled && notificationPermission === 'granted') {
+      scheduleNotification();
+    }
+  };
+
   // Load dark mode preference
   useEffect(() => {
     const savedTheme = getCookie('wordleTheme');
@@ -260,6 +213,42 @@ const Wordle = () => {
     setCookie('wordleTheme', newMode ? 'dark' : 'light', 365);
   };
 
+  // Load notification preferences on mount
+  useEffect(() => {
+    loadNotificationPreferences();
+  }, []);
+
+  // Schedule notifications when enabled and time changes
+  useEffect(() => {
+    if (notificationsEnabled && notificationPermission === 'granted') {
+      scheduleNotification();
+    }
+  }, [notificationsEnabled, notificationTime, notificationPermission, scheduleNotification]);
+
+  // Check for notification on page load
+  useEffect(() => {
+    const checkAndNotify = () => {
+      if (notificationsEnabled && notificationPermission === 'granted') {
+        const lastNotificationDate = getCookie('wordleLastNotification');
+        const today = getTodayDateString();
+
+        if (lastNotificationDate !== today) {
+          const now = new Date();
+          const [hours, minutes] = notificationTime.split(':').map(Number);
+          const currentHour = now.getHours();
+          const currentMinute = now.getMinutes();
+
+          if (currentHour === hours && Math.abs(currentMinute - minutes) <= 5) {
+            sendNotification();
+            setCookie('wordleLastNotification', today, 1);
+          }
+        }
+      }
+    };
+
+    checkAndNotify();
+  }, [notificationsEnabled, notificationTime, notificationPermission]);
+
   const isTodayWordCompleted = () => {
     const todaySession = getTodayGameSession();
     return todaySession && (todaySession.gameStatus === 'won' || todaySession.gameStatus === 'lost');
@@ -268,6 +257,7 @@ const Wordle = () => {
   const handleShowTodayResult = async () => {
     const todaySession = getTodayGameSession();
     if (todaySession && (todaySession.gameStatus === 'won' || todaySession.gameStatus === 'lost')) {
+      // Fetch meaning if not already loaded
       const meaning = await fetchWordMeaning(todaySession.targetWord);
 
       setTodayGameData({
@@ -281,22 +271,24 @@ const Wordle = () => {
   };
 
   const getTodayDateString = () => {
+    // Get current date in Asia/Kolkata timezone
     const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
     const kolkataDate = new Date(today);
     const year = kolkataDate.getFullYear();
     const month = String(kolkataDate.getMonth() + 1).padStart(2, '0');
     const day = String(kolkataDate.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return `${year}-${month}-${day}`; // YYYY-MM-DD format in IST
   };
 
   const getYesterdayDateString = () => {
+    // Get yesterday's date in Asia/Kolkata timezone
     const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
     const kolkataDate = new Date(today);
     kolkataDate.setDate(kolkataDate.getDate() - 1);
     const year = kolkataDate.getFullYear();
     const month = String(kolkataDate.getMonth() + 1).padStart(2, '0');
     const day = String(kolkataDate.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return `${year}-${month}-${day}`; // YYYY-MM-DD format in IST
   };
 
   // Today's game session management
@@ -307,9 +299,11 @@ const Wordle = () => {
         const data = JSON.parse(decodeURIComponent(sessionData));
         const today = getTodayDateString();
 
+        // Check if session is for today (in IST timezone)
         if (data.date === today) {
           return data;
         } else {
+          // Old session (from before today's IST midnight), clear it
           deleteCookie('wordleTodaySession');
           return null;
         }
@@ -351,52 +345,78 @@ const Wordle = () => {
   const updateStreak = (won) => {
     const today = getTodayDateString();
     const streakData = loadStreakData();
+    const lastWonDate = streakData.lastWonDate;
+    const yesterday = getYesterdayDateString();
+
+    let newCurrentStreak = streakData.currentStreak;
+    let newMaxStreak = streakData.maxStreak;
 
     if (won) {
-      const yesterday = getYesterdayDateString();
-      let newCurrentStreak = 1;
-
-      if (streakData.lastWonDate === yesterday) {
-        newCurrentStreak = (streakData.currentStreak || 0) + 1;
-      } else if (streakData.lastWonDate === today) {
-        newCurrentStreak = streakData.currentStreak;
+      // Check if already won today
+      if (lastWonDate === today) {
+        // Already won today, don't update streak
+        return;
       }
 
-      const newMaxStreak = Math.max(newCurrentStreak, streakData.maxStreak || 0);
+      // Check if won yesterday (consecutive day)
+      if (lastWonDate === yesterday) {
+        newCurrentStreak += 1;
+      } else if (lastWonDate === '') {
+        // First time winning
+        newCurrentStreak = 1;
+      } else {
+        // Streak broken, start new streak
+        newCurrentStreak = 1;
+      }
 
-      const newStreakData = {
+      // Update max streak if current exceeds it
+      if (newCurrentStreak > newMaxStreak) {
+        newMaxStreak = newCurrentStreak;
+      }
+
+      // Save updated streak data
+      const updatedStreakData = {
         currentStreak: newCurrentStreak,
         maxStreak: newMaxStreak,
         lastWonDate: today
       };
 
-      setCookie('wordleStreak', encodeURIComponent(JSON.stringify(newStreakData)), 365);
+      setCookie('wordleStreak', encodeURIComponent(JSON.stringify(updatedStreakData)), 365);
       setCurrentStreak(newCurrentStreak);
       setMaxStreak(newMaxStreak);
     } else {
-      if (streakData.lastWonDate !== today) {
-        const newStreakData = {
-          currentStreak: 0,
-          maxStreak: streakData.maxStreak || 0,
-          lastWonDate: ''
-        };
-        setCookie('wordleStreak', encodeURIComponent(JSON.stringify(newStreakData)), 365);
-        setCurrentStreak(0);
+      // Lost the game
+      // Only reset streak if we haven't already lost today
+      if (lastWonDate !== today) {
+        // Check if we had a streak from yesterday
+        if (lastWonDate === yesterday || lastWonDate === '') {
+          // Reset current streak but keep max streak
+          const updatedStreakData = {
+            currentStreak: 0,
+            maxStreak: newMaxStreak,
+            lastWonDate: lastWonDate
+          };
+
+          setCookie('wordleStreak', encodeURIComponent(JSON.stringify(updatedStreakData)), 365);
+          setCurrentStreak(0);
+        }
       }
     }
   };
 
-  const saveGameHistory = (gameResult) => {
-    const history = loadGameHistory();
-    history.push(gameResult);
-
-    const last100 = history.slice(-100);
-    setCookie('wordleHistory', encodeURIComponent(JSON.stringify(last100)), 365);
-    setGameHistory(last100);
-  };
-
   const loadGameHistory = () => {
     const historyData = getCookie('wordleHistory');
+    const historyDate = getCookie('wordleHistoryDate');
+    const today = getTodayDateString();
+
+    if (historyDate !== today) {
+      // Clear old history if date is different (based on IST timezone)
+      deleteCookie('wordleHistory');
+      deleteCookie('wordleHistoryDate');
+      setGameHistory([]);
+      return [];
+    }
+
     if (historyData) {
       try {
         const history = JSON.parse(decodeURIComponent(historyData));
@@ -408,409 +428,520 @@ const Wordle = () => {
         return [];
       }
     }
+
     return [];
   };
 
-  useEffect(() => {
-    loadGameHistory();
-    loadStreakData();
-    loadDailyWordStats();
-  }, []);
-
-  const getDailyWord = useCallback(async () => {
+  const saveGameResult = (result) => {
     const today = getTodayDateString();
-    const existingSession = getTodayGameSession();
+    const currentHistory = loadGameHistory();
+    const newHistory = [...currentHistory, result];
 
-    if (existingSession) {
-      setTargetWord(existingSession.targetWord);
-      setGuesses(existingSession.guesses || []);
-      setGameStatus(existingSession.gameStatus);
-      setUsedLetters(existingSession.usedLetters || {});
-      setIsPlayingTodayWord(true);
-      setTodayWordCompleted(existingSession.gameStatus === 'won' || existingSession.gameStatus === 'lost');
+    setGameHistory(newHistory);
+    setCookie('wordleHistory', encodeURIComponent(JSON.stringify(newHistory)));
+    setCookie('wordleHistoryDate', today);
 
-      if (existingSession.gameStatus === 'won' || existingSession.gameStatus === 'lost') {
-        const meaning = await fetchWordMeaning(existingSession.targetWord);
-        setWordMeaning(meaning);
+    // Update streak based on result only if playing today's word
+    if (isPlayingTodayWord) {
+      updateStreak(result.won);
+
+      // Update daily word stats if won
+      if (result.won) {
+        updateDailyWordStats(result.guesses);
       }
-      return;
     }
+  };
 
-    const hash = await crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(today)
-    );
-    const hashArray = Array.from(new Uint8Array(hash));
-    const seed = hashArray.reduce((acc, byte) => acc + byte, 0);
+  const getGameStats = (history) => {
+    const totalGames = history.length;
+    const wins = history.filter(game => game.won).length;
+    const losses = totalGames - wins;
+    const winPercentage = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
 
-    const commonWords = [
-      'AUDIO', 'ABOUT', 'AFTER', 'AGAIN', 'ALLOW', 'ALONE', 'ALONG', 'AMONG',
-      'ANGEL', 'ANGLE', 'ANGRY', 'APART', 'APPLE', 'APPLY', 'ARENA', 'ARGUE',
-      'ARISE', 'BEACH', 'BEGAN', 'BEGIN', 'BEING', 'BELOW', 'BENCH', 'BILLY',
-      'BIRTH', 'BLACK', 'BLAME', 'BLOOD', 'BOARD', 'BOOST', 'BOOTH', 'BOUND',
-      'BRAIN', 'BRAND', 'BRAVE', 'BREAD', 'BREAK', 'BREED', 'BRING', 'BROAD',
-      'BROKE', 'BROWN', 'BUILD', 'BUILT', 'BUYER', 'CABLE', 'CALIF', 'CARRY',
-      'CATCH', 'CAUSE', 'CHAIN', 'CHAIR', 'CHART', 'CHASE', 'CHEAP', 'CHECK',
-      'CHEST', 'CHIEF', 'CHILD', 'CHINA', 'CHOSE', 'CLAIM', 'CLASS', 'CLEAN',
-      'CLEAR', 'CLICK', 'CLOCK', 'CLOSE', 'COACH', 'COAST', 'COULD', 'COUNT',
-      'COURT', 'COVER', 'CRAFT', 'CRASH', 'CRAZY', 'CREAM', 'CRIME', 'CROSS',
-      'CROWD', 'CROWN', 'CRUDE', 'DAILY', 'DANCE', 'DATED', 'DEALT', 'DEATH',
-      'DEBUT', 'DELAY', 'DEPTH', 'DOING', 'DOUBT', 'DOZEN', 'DRAFT', 'DRAMA',
-      'DRAWN', 'DREAM', 'DRESS', 'DRILL', 'DRINK', 'DRIVE', 'DROVE', 'DYING',
-      'EAGER', 'EARLY', 'EARTH', 'EIGHT', 'ELITE', 'EMPTY', 'ENEMY', 'ENJOY',
-      'ENTER', 'ENTRY', 'EQUAL', 'ERROR', 'EVENT', 'EVERY', 'EXACT', 'EXIST',
-      'EXTRA', 'FAITH', 'FALSE', 'FAULT', 'FIBER', 'FIELD', 'FIFTH', 'FIFTY',
-      'FIGHT', 'FINAL', 'FIRST', 'FIXED', 'FLASH', 'FLEET', 'FLOOR', 'FLUID',
-      'FOCUS', 'FORCE', 'FORTH', 'FORTY', 'FORUM', 'FOUND', 'FRAME', 'FRANK',
-      'FRAUD', 'FRESH', 'FRONT', 'FRUIT', 'FULLY', 'FUNNY', 'GIANT', 'GIVEN',
-      'GLASS', 'GLOBE', 'GOING', 'GRACE', 'GRADE', 'GRAND', 'GRANT', 'GRASS',
-      'GREAT', 'GREEN', 'GROSS', 'GROUP', 'GROWN', 'GUARD', 'GUESS', 'GUEST',
-      'GUIDE', 'HAPPY', 'HARRY', 'HEART', 'HEAVY', 'HENRY', 'HORSE', 'HOTEL',
-      'HOUSE', 'HUMAN', 'IDEAL', 'IMAGE', 'INDEX', 'INNER', 'INPUT', 'ISSUE',
-      'JAPAN', 'JIMMY', 'JOINT', 'JONES', 'JUDGE', 'KNOWN', 'LABEL', 'LARGE',
-      'LASER', 'LATER', 'LAUGH', 'LAYER', 'LEARN', 'LEASE', 'LEAST', 'LEAVE',
-      'LEGAL', 'LEMON', 'LEVEL', 'LIGHT', 'LIMIT', 'LOCAL', 'LOGIC', 'LOOSE',
-      'LOWER', 'LUCKY', 'LUNCH', 'LYING', 'MAGIC', 'MAJOR', 'MAKER', 'MARCH',
-      'MARIA', 'MATCH', 'MAYBE', 'MAYOR', 'MEANT', 'MEDIA', 'METAL', 'MIGHT',
-      'MINOR', 'MINUS', 'MIXED', 'MODEL', 'MONEY', 'MONTH', 'MORAL', 'MOTOR',
-      'MOUNT', 'MOUSE', 'MOUTH', 'MOVIE', 'MUSIC', 'NEEDS', 'NEVER', 'NEWLY',
-      'NIGHT', 'NOISE', 'NORTH', 'NOTED', 'NOVEL', 'NURSE', 'OCCUR', 'OCEAN',
-      'OFFER', 'OFTEN', 'ORDER', 'OTHER', 'OUGHT', 'PAINT', 'PANEL', 'PAPER',
-      'PARTY', 'PEACE', 'PETER', 'PHASE', 'PHONE', 'PHOTO', 'PIECE', 'PILOT',
-      'PITCH', 'PLACE', 'PLAIN', 'PLANE', 'PLANT', 'PLATE', 'POINT', 'POUND',
-      'POWER', 'PRESS', 'PRICE', 'PRIDE', 'PRIME', 'PRINT', 'PRIOR', 'PRIZE',
-      'PROOF', 'PROUD', 'PROVE', 'QUEEN', 'QUICK', 'QUIET', 'QUITE', 'RADIO',
-      'RAISE', 'RANGE', 'RAPID', 'RATIO', 'REACH', 'READY', 'REFER', 'RIGHT',
-      'RIVER', 'ROBIN', 'ROGER', 'ROMAN', 'ROUGH', 'ROUND', 'ROUTE', 'ROYAL',
-      'RURAL', 'SCALE', 'SCENE', 'SCOPE', 'SCORE', 'SENSE', 'SERVE', 'SEVEN',
-      'SHALL', 'SHAPE', 'SHARE', 'SHARP', 'SHEET', 'SHELF', 'SHELL', 'SHIFT',
-      'SHINE', 'SHIRT', 'SHOCK', 'SHOOT', 'SHORT', 'SHOWN', 'SIGHT', 'SINCE',
-      'SIXTH', 'SIXTY', 'SIZED', 'SKILL', 'SLEEP', 'SLIDE', 'SMALL', 'SMART',
-      'SMILE', 'SMITH', 'SMOKE', 'SOLID', 'SOLVE', 'SORRY', 'SOUND', 'SOUTH',
-      'SPACE', 'SPARE', 'SPEAK', 'SPEED', 'SPEND', 'SPENT', 'SPLIT', 'SPOKE',
-      'SPORT', 'STAFF', 'STAGE', 'STAKE', 'STAND', 'START', 'STATE', 'STEAM',
-      'STEEL', 'STICK', 'STILL', 'STOCK', 'STONE', 'STOOD', 'STORE', 'STORM',
-      'STORY', 'STRIP', 'STUCK', 'STUDY', 'STUFF', 'STYLE', 'SUGAR', 'SUITE',
-      'SUPER', 'SWEET', 'TABLE', 'TAKEN', 'TASTE', 'TAXES', 'TEACH', 'TEENS',
-      'TEETH', 'TERRY', 'TEXAS', 'THANK', 'THEFT', 'THEIR', 'THEME', 'THERE',
-      'THESE', 'THICK', 'THING', 'THINK', 'THIRD', 'THOSE', 'THREE', 'THREW',
-      'THROW', 'TIGHT', 'TIMES', 'TITLE', 'TODAY', 'TOPIC', 'TOTAL', 'TOUCH',
-      'TOUGH', 'TOWER', 'TRACK', 'TRADE', 'TRAIN', 'TREAT', 'TREND', 'TRIAL',
-      'TRIBE', 'TRICK', 'TRIED', 'TRIES', 'TROOP', 'TRUCK', 'TRULY', 'TRUMP',
-      'TRUST', 'TRUTH', 'TWICE', 'UNDER', 'UNDUE', 'UNION', 'UNITY', 'UNTIL',
-      'UPPER', 'URBAN', 'USAGE', 'USUAL', 'VALID', 'VALUE', 'VIDEO', 'VIRUS',
-      'VISIT', 'VITAL', 'VOCAL', 'VOICE', 'WASTE', 'WATCH', 'WATER', 'WHEEL',
-      'WHERE', 'WHICH', 'WHILE', 'WHITE', 'WHOLE', 'WHOSE', 'WOMAN', 'WOMEN',
-      'WORLD', 'WORRY', 'WORSE', 'WORST', 'WORTH', 'WOULD', 'WOUND', 'WRITE',
-      'WRONG', 'WROTE', 'YOUNG', 'YOUTH'
-    ];
-
-    const wordIndex = seed % commonWords.length;
-    const selectedWord = commonWords[wordIndex];
-
-    setTargetWord(selectedWord);
-    setGuesses([]);
-    setGameStatus('playing');
-    setUsedLetters({});
-    setIsPlayingTodayWord(true);
-    setTodayWordCompleted(false);
-
-    saveTodayGameSession({
-      date: today,
-      targetWord: selectedWord,
-      guesses: [],
-      gameStatus: 'playing',
-      usedLetters: {}
+    const guessDistribution = [0, 0, 0, 0, 0, 0]; // Index 0 = 1 guess, Index 5 = 6 guesses
+    history.forEach(game => {
+      if (game.won && game.guesses <= 6) {
+        guessDistribution[game.guesses - 1]++;
+      }
     });
-  }, []);
 
-  const fetchNewWord = useCallback(async () => {
-    setGameStatus('loading');
-    setError('');
-    setIsPlayingTodayWord(false);
-
-    try {
-      const response = await fetch('https://random-word-api.herokuapp.com/word?length=5');
-      const data = await response.json();
-      const word = data[0].toUpperCase();
-
-      setTargetWord(word);
-      setWordMeaning(null);
-      resetGame();
-    } catch (err) {
-      setError('Failed to fetch word. Please try again.');
-      setGameStatus('playing');
-    }
-  }, []);
+    return {
+      totalGames,
+      wins,
+      losses,
+      winPercentage,
+      guessDistribution
+    };
+  };
 
   const fetchWordMeaning = async (word) => {
     try {
-      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`);
-      if (!response.ok) return null;
-
-      const data = await response.json();
-      if (data && data.length > 0) {
-        const entry = data[0];
-        const meanings = entry.meanings.slice(0, 2).map(m => ({
-          partOfSpeech: m.partOfSpeech,
-          definition: m.definitions[0].definition,
-          example: m.definitions[0].example
-        }));
-
-        return {
-          word: entry.word.toUpperCase(),
-          phonetic: entry.phonetic || entry.phonetics[0]?.text,
-          meanings: meanings
-        };
+      const response = await fetch(`https://wordlegame-0n81.onrender.com/word-meaning/${word.toLowerCase()}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      const data = await response.json();
+      return data;
     } catch (err) {
       console.error('Error fetching word meaning:', err);
+      return null;
     }
-    return null;
   };
 
   const validateWord = async (word) => {
     try {
-      setIsValidating(true);
-      setValidationMessage('Checking word...');
-
-      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`);
-      const isValid = response.ok;
-
-      setValidationMessage('');
-      setIsValidating(false);
-      return isValid;
+      const meaning = await fetchWordMeaning(word);
+      return meaning !== null && meaning.meanings && meaning.meanings.length > 0;
     } catch (err) {
-      setValidationMessage('');
-      setIsValidating(false);
+      console.error('Error validating word:', err);
       return false;
     }
   };
 
-  useEffect(() => {
-    getDailyWord();
-  }, [getDailyWord]);
+  const restoreTodaySession = async (session) => {
+    console.log('Restoring session:', session);
+    setTargetWord(session.targetWord);
+    setGuesses(session.guesses);
+    setUsedLetters(session.usedLetters);
+    setGameStatus(session.gameStatus);
+    setIsPlayingTodayWord(true);
+    setTodayWordCompleted(session.gameStatus === 'won' || session.gameStatus === 'lost');
+    setCurrentGuess(''); // Clear any current guess
 
-  useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (gameStatus !== 'playing' || isValidating) return;
+    // Fetch meaning for the word
+    const meaning = await fetchWordMeaning(session.targetWord);
+    setWordMeaning(meaning);
 
-      if (e.key === 'Enter') {
-        handleSubmitGuess();
-      } else if (e.key === 'Backspace') {
-        handleBackspace();
-      } else if (/^[a-zA-Z]$/.test(e.key)) {
-        handleLetterInput(e.key.toUpperCase());
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentGuess, gameStatus, isValidating]);
-
-  const handleLetterInput = (letter) => {
-    if (currentGuess.length < wordLength) {
-      setCurrentGuess(prev => prev + letter);
-    }
-  };
-
-  const handleBackspace = () => {
-    setCurrentGuess(prev => prev.slice(0, -1));
-  };
-
-  const handleSubmitGuess = async () => {
-    if (currentGuess.length !== wordLength) {
-      setValidationMessage(`Word must be ${wordLength} letters long`);
-      setTimeout(() => setValidationMessage(''), 2000);
-      return;
-    }
-
-    const isValid = await validateWord(currentGuess);
-    if (!isValid) {
-      setValidationMessage('Not a valid English word');
-      setShake(true);
-      setTimeout(() => {
-        setShake(false);
-        setValidationMessage('');
-      }, 500);
-      return;
-    }
-
-    const result = Array(wordLength).fill('absent');
-    const targetLetters = targetWord.split('');
-    const guessLetters = currentGuess.split('');
-
-    guessLetters.forEach((letter, i) => {
-      if (letter === targetLetters[i]) {
-        result[i] = 'correct';
-        targetLetters[i] = null;
-      }
-    });
-
-    guessLetters.forEach((letter, i) => {
-      if (result[i] !== 'correct' && targetLetters.includes(letter)) {
-        result[i] = 'present';
-        targetLetters[targetLetters.indexOf(letter)] = null;
-      }
-    });
-
-    const newGuess = { word: currentGuess, result };
-    const newGuesses = [...guesses, newGuess];
-    setGuesses(newGuesses);
-
-    const newUsedLetters = { ...usedLetters };
-    currentGuess.split('').forEach((letter, i) => {
-      const currentStatus = newUsedLetters[letter];
-      const newStatus = result[i];
-      if (
-        !currentStatus ||
-        (newStatus === 'correct') ||
-        (newStatus === 'present' && currentStatus !== 'correct')
-      ) {
-        newUsedLetters[letter] = newStatus;
-      }
-    });
-    setUsedLetters(newUsedLetters);
-
-    setCurrentGuess('');
-
-    const hasWon = result.every(r => r === 'correct');
-    let newGameStatus = 'playing';
-
-    if (hasWon) {
-      newGameStatus = 'won';
-      setGameStatus('won');
-
-      const gameResult = {
-        date: new Date().toISOString(),
-        word: targetWord,
-        guesses: newGuesses.length,
-        won: true,
-        isTodayWord: isPlayingTodayWord
-      };
-
-      saveGameHistory(gameResult);
-
-      if (isPlayingTodayWord) {
-        updateStreak(true);
-        setTodayWordCompleted(true);
-        updateDailyWordStats(newGuesses.length);
-      }
-
-      const meaning = await fetchWordMeaning(targetWord);
-      setWordMeaning(meaning);
-    } else if (newGuesses.length >= maxGuesses) {
-      newGameStatus = 'lost';
-      setGameStatus('lost');
-
-      const gameResult = {
-        date: new Date().toISOString(),
-        word: targetWord,
-        guesses: maxGuesses,
-        won: false,
-        isTodayWord: isPlayingTodayWord
-      };
-
-      saveGameHistory(gameResult);
-
-      if (isPlayingTodayWord) {
-        updateStreak(false);
-        setTodayWordCompleted(true);
-      }
-
-      const meaning = await fetchWordMeaning(targetWord);
-      setWordMeaning(meaning);
-    }
-
-    if (isPlayingTodayWord) {
-      saveTodayGameSession({
-        date: getTodayDateString(),
-        targetWord: targetWord,
-        guesses: newGuesses,
-        gameStatus: newGameStatus,
-        usedLetters: newUsedLetters
+    // Save today's game data for modal display (if game is completed)
+    if (session.gameStatus === 'won' || session.gameStatus === 'lost') {
+      setTodayGameData({
+        targetWord: session.targetWord,
+        guesses: session.guesses,
+        gameStatus: session.gameStatus,
+        meaning: meaning
       });
     }
   };
 
-  const resetGame = () => {
+  const fetchTodaysWord = async () => {
+    try {
+      setGameStatus('loading');
+      setError('');
+
+      // Check if today's game session exists (based on IST timezone)
+      const todaySession = getTodayGameSession();
+      if (todaySession) {
+        console.log('Restoring today\'s session:', todaySession);
+        await restoreTodaySession(todaySession);
+        return;
+      }
+
+      const url = 'https://wordlegame-0n81.onrender.com/wordle-word';
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('API Response:', data);
+
+      if (data.solution && typeof data.solution === 'string') {
+        const solution = data.solution.toUpperCase();
+        console.log('Setting target word:', solution);
+        setTargetWord(solution);
+
+        // Fetch meaning for the word
+        const meaning = await fetchWordMeaning(solution);
+        setWordMeaning(meaning);
+
+        setGameStatus('playing');
+        setIsPlayingTodayWord(true);
+        setTodayWordCompleted(false);
+        resetGame();
+      } else {
+        console.error('Invalid API response:', data);
+        throw new Error(data.error || 'No solution found in API response');
+      }
+    } catch (err) {
+      console.error('Error fetching today\'s word:', err);
+      setError(`Could not fetch today's word: ${err.message}`);
+      setTargetWord('REACT');
+
+      // Fetch meaning for fallback word
+      const meaning = await fetchWordMeaning('REACT');
+      setWordMeaning(meaning || {
+        word: 'REACT',
+        phonetic: '/riˈækt/',
+        meanings: [
+          {
+            partOfSpeech: 'verb',
+            definition: 'respond or behave in a particular way in response to something'
+          }
+        ]
+      });
+
+      setGameStatus('playing');
+      setIsPlayingTodayWord(true);
+      setTodayWordCompleted(false);
+      resetGame();
+    }
+  };
+
+  const fetchNewWord = async () => {
+    try {
+      setGameStatus('loading');
+      setError('');
+      const url = 'https://wordlegame-0n81.onrender.com/wordle-word?today=false';
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('New Word API Response:', data);
+
+      if (data.solution && typeof data.solution === 'string') {
+        const solution = data.solution.toUpperCase();
+        console.log('Setting new target word:', solution);
+        setTargetWord(solution);
+
+        // Fetch meaning for the word
+        const meaning = await fetchWordMeaning(solution);
+        setWordMeaning(meaning);
+
+        setGameStatus('playing');
+        setIsPlayingTodayWord(false); // Mark as practice word
+        setTodayWordCompleted(false);
+        resetGame();
+      } else {
+        console.error('Invalid API response:', data);
+        throw new Error(data.error || 'No solution found in API response');
+      }
+    } catch (err) {
+      console.error('Error fetching new word:', err);
+      setError(`Could not fetch new word: ${err.message}`);
+      // Fall back to a random word from a small list
+      const fallbackWords = ['BEACH', 'CRANE', 'FLAME', 'GRAPE', 'HOUSE'];
+      const randomWord = fallbackWords[Math.floor(Math.random() * fallbackWords.length)];
+      setTargetWord(randomWord);
+
+      // Fetch meaning for fallback word
+      const meaning = await fetchWordMeaning(randomWord);
+      setWordMeaning(meaning);
+
+      setGameStatus('playing');
+      setIsPlayingTodayWord(false); // Mark as practice word
+      setTodayWordCompleted(false);
+      resetGame();
+    }
+  };
+
+  // Load game history, streak, and daily word stats on component mount
+  useEffect(() => {
+    loadGameHistory();
+    loadStreakData();
+    loadDailyWordStats();
+    fetchTodaysWord();
+  }, []);
+
+  const resetGame = useCallback(() => {
     setGuesses([]);
     setCurrentGuess('');
-    setGameStatus('playing');
     setUsedLetters({});
-    setWordMeaning(null);
+    setValidationMessage('');
+    if (gameStatus !== 'loading') {
+      setGameStatus('playing');
+    }
+  }, [gameStatus]);
+
+  const setNewWord = async () => {
+    if (customWord.length === wordLength && /^[A-Za-z]+$/.test(customWord)) {
+      setTargetWord(customWord.toUpperCase());
+
+      // Fetch meaning for custom word
+      const meaning = await fetchWordMeaning(customWord);
+      setWordMeaning(meaning);
+
+      setCustomWord('');
+      setIsPlayingTodayWord(false); // Custom word is practice
+      setTodayWordCompleted(false);
+      resetGame();
+    }
   };
+
+  const checkGuess = (guess) => {
+    const result = [];
+    const targetLetters = targetWord.split('');
+    const guessLetters = guess.split('');
+    const letterCount = {};
+
+    // Count letters in target word
+    targetLetters.forEach(letter => {
+      letterCount[letter] = (letterCount[letter] || 0) + 1;
+    });
+
+    // First pass: mark correct positions
+    guessLetters.forEach((letter, index) => {
+      if (letter === targetLetters[index]) {
+        result[index] = 'correct';
+        letterCount[letter]--;
+      }
+    });
+
+    // Second pass: mark present/absent
+    guessLetters.forEach((letter, index) => {
+      if (result[index] === undefined) {
+        if (letterCount[letter] > 0) {
+          result[index] = 'present';
+          letterCount[letter]--;
+        } else {
+          result[index] = 'absent';
+        }
+      }
+    });
+
+    return result;
+  };
+
+  const updateUsedLetters = (guess, result) => {
+    const newUsedLetters = { ...usedLetters };
+    guess.split('').forEach((letter, index) => {
+      const status = result[index];
+      if (!newUsedLetters[letter] ||
+          (newUsedLetters[letter] === 'absent' && status !== 'absent') ||
+          (newUsedLetters[letter] === 'present' && status === 'correct')) {
+        newUsedLetters[letter] = status;
+      }
+    });
+    setUsedLetters(newUsedLetters);
+    return newUsedLetters;
+  };
+
+  const submitGuess = async () => {
+    if (currentGuess.length !== wordLength) {
+      setShake(true);
+      setValidationMessage('Word must be 5 letters long');
+      setTimeout(() => {
+        setShake(false);
+        setValidationMessage('');
+      }, 2000);
+      return;
+    }
+
+    // Check if the guess is the target word (always allow)
+    if (currentGuess === targetWord) {
+      const result = checkGuess(currentGuess);
+      const newGuess = { word: currentGuess, result };
+      const newGuesses = [...guesses, newGuess];
+      const newUsedLetters = updateUsedLetters(currentGuess, result);
+
+      setGuesses(newGuesses);
+      setGameStatus('won');
+      setCurrentGuess('');
+
+      // Save game result
+      const gameResult = {
+        word: targetWord,
+        won: true,
+        guesses: newGuesses.length,
+        date: new Date().toISOString(),
+        timestamp: Date.now()
+      };
+      saveGameResult(gameResult);
+
+      // Save today's session only if playing today's word
+      if (isPlayingTodayWord) {
+        const sessionData = {
+          date: getTodayDateString(),
+          targetWord: targetWord,
+          guesses: newGuesses,
+          usedLetters: newUsedLetters,
+          gameStatus: 'won'
+        };
+        saveTodayGameSession(sessionData);
+        setTodayWordCompleted(true);
+
+        // Save today's game data for modal display
+        setTodayGameData({
+          targetWord: targetWord,
+          guesses: newGuesses,
+          gameStatus: 'won',
+          meaning: wordMeaning
+        });
+      }
+      return;
+    }
+
+    // Validate the word by checking if it has a meaning
+    setIsValidating(true);
+    setValidationMessage('Checking word...');
+
+    const isValid = await validateWord(currentGuess);
+
+    setIsValidating(false);
+
+    if (!isValid) {
+      setShake(true);
+      setValidationMessage('Sorry, does not look to be a valid English word');
+      setTimeout(() => {
+        setShake(false);
+        setValidationMessage('');
+      }, 3000);
+      return;
+    }
+
+    // Word is valid, proceed with the guess
+    setValidationMessage('');
+    const result = checkGuess(currentGuess);
+    const newGuess = { word: currentGuess, result };
+    const newGuesses = [...guesses, newGuess];
+    const newUsedLetters = updateUsedLetters(currentGuess, result);
+
+    setGuesses(newGuesses);
+
+    if (currentGuess === targetWord) {
+      setGameStatus('won');
+      // Save game result
+      const gameResult = {
+        word: targetWord,
+        won: true,
+        guesses: newGuesses.length,
+        date: new Date().toISOString(),
+        timestamp: Date.now()
+      };
+      saveGameResult(gameResult);
+
+      // Save today's session only if playing today's word
+      if (isPlayingTodayWord) {
+        const sessionData = {
+          date: getTodayDateString(),
+          targetWord: targetWord,
+          guesses: newGuesses,
+          usedLetters: newUsedLetters,
+          gameStatus: 'won'
+        };
+        saveTodayGameSession(sessionData);
+        setTodayWordCompleted(true);
+
+        // Save today's game data for modal display
+        setTodayGameData({
+          targetWord: targetWord,
+          guesses: newGuesses,
+          gameStatus: 'won',
+          meaning: wordMeaning
+        });
+      }
+    } else if (newGuesses.length >= maxGuesses) {
+      setGameStatus('lost');
+      // Save game result
+      const gameResult = {
+        word: targetWord,
+        won: false,
+        guesses: newGuesses.length,
+        date: new Date().toISOString(),
+        timestamp: Date.now()
+      };
+      saveGameResult(gameResult);
+
+      // Save today's session only if playing today's word
+      if (isPlayingTodayWord) {
+        const sessionData = {
+          date: getTodayDateString(),
+          targetWord: targetWord,
+          guesses: newGuesses,
+          usedLetters: newUsedLetters,
+          gameStatus: 'lost'
+        };
+        saveTodayGameSession(sessionData);
+        setTodayWordCompleted(true);
+
+        // Save today's game data for modal display
+        setTodayGameData({
+          targetWord: targetWord,
+          guesses: newGuesses,
+          gameStatus: 'lost',
+          meaning: wordMeaning
+        });
+      }
+    } else {
+      // Game still in progress - save session if playing today's word
+      if (isPlayingTodayWord) {
+        const sessionData = {
+          date: getTodayDateString(),
+          targetWord: targetWord,
+          guesses: newGuesses,
+          usedLetters: newUsedLetters,
+          gameStatus: 'playing'
+        };
+        saveTodayGameSession(sessionData);
+      }
+    }
+
+    setCurrentGuess('');
+  };
+
+  const handleKeyPress = useCallback((e) => {
+    if (gameStatus !== 'playing' || isValidating) return;
+
+    if (e.key === 'Enter') {
+      submitGuess();
+    } else if (e.key === 'Backspace') {
+      setCurrentGuess(prev => prev.slice(0, -1));
+      setValidationMessage(''); // Clear validation message when user starts typing
+    } else if (/^[A-Za-z]$/.test(e.key) && currentGuess.length < wordLength) {
+      setCurrentGuess(prev => prev + e.key.toUpperCase());
+      setValidationMessage(''); // Clear validation message when user starts typing
+    }
+  }, [currentGuess, gameStatus, targetWord, guesses, usedLetters, isValidating]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [handleKeyPress]);
+
+  const getCellStyle = (status, hasLetter = false) => {
+    const baseStyle = "w-12 h-12 sm:w-14 sm:h-14 border-2 flex items-center justify-center text-lg sm:text-2xl font-bold transition-all duration-300";
+    switch (status) {
+      case 'correct':
+        return `${baseStyle} bg-green-500 border-green-500 text-white`;
+      case 'present':
+        return `${baseStyle} bg-yellow-500 border-yellow-500 text-white`;
+      case 'absent':
+        return `${baseStyle} ${darkMode ? 'bg-gray-700 border-gray-700' : 'bg-gray-500 border-gray-500'} text-white`;
+      default:
+        return `${baseStyle} ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300'} ${hasLetter ? (darkMode ? 'text-white border-gray-400' : 'text-black border-gray-500') : (darkMode ? 'text-white' : 'text-black')}`;
+    }
+  };
+
+  const getKeyStyle = (letter) => {
+  const baseStyle = "px-2 sm:px-3 py-3 sm:py-4 m-0.5 sm:m-1 rounded font-bold cursor-pointer transition-all duration-200 hover:opacity-80 text-sm sm:text-base";
+  const status = usedLetters[letter];
+  switch (status) {
+    case 'correct':
+      return `${baseStyle} bg-green-500 text-white`;
+    case 'present':
+      return `${baseStyle} bg-yellow-500 text-white`;
+    case 'absent':
+      return `${baseStyle} ${darkMode ? 'bg-gray-900 text-gray-500' : 'bg-gray-500 text-white'}`;
+    default:
+      return `${baseStyle} ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-black'}`;
+  }
+};
 
   const handleKeyClick = (key) => {
+    if (gameStatus !== 'playing' || isValidating) return;
+
     if (key === 'ENTER') {
-      handleSubmitGuess();
+      submitGuess();
     } else if (key === '⌫') {
-      handleBackspace();
-    } else {
-      handleLetterInput(key);
+      setCurrentGuess(prev => prev.slice(0, -1));
+      setValidationMessage(''); // Clear validation message when user starts typing
+    } else if (currentGuess.length < wordLength) {
+      setCurrentGuess(prev => prev + key);
+      setValidationMessage(''); // Clear validation message when user starts typing
     }
-  };
-
-  const getCellStyle = (status, hasLetter) => {
-    const baseStyle = `
-      w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14
-      flex items-center justify-center
-      text-lg sm:text-xl md:text-2xl font-bold
-      border-2 rounded transition-all duration-300
-    `;
-
-    if (!hasLetter) {
-      return `${baseStyle} ${
-        darkMode
-          ? 'border-gray-600 bg-gray-800 text-white'
-          : 'border-gray-300 bg-white text-gray-800'
-      }`;
-    }
-
-    if (status === 'correct') {
-      return `${baseStyle} bg-green-500 border-green-500 text-white`;
-    } else if (status === 'present') {
-      return `${baseStyle} bg-yellow-500 border-yellow-500 text-white`;
-    } else if (status === 'absent') {
-      return `${baseStyle} ${
-        darkMode
-          ? 'bg-gray-700 border-gray-700 text-white'
-          : 'bg-gray-400 border-gray-400 text-white'
-      }`;
-    }
-
-    return `${baseStyle} ${
-      darkMode
-        ? 'border-gray-600 bg-gray-800 text-white'
-        : 'border-gray-300 bg-white text-gray-800'
-    }`;
-  };
-
-  const getKeyStyle = (key) => {
-    const status = usedLetters[key];
-    const baseStyle = `
-      m-0.5 sm:m-1 px-2 py-2 sm:px-3 sm:py-3
-      text-xs sm:text-sm font-bold rounded
-      transition-all duration-200
-    `;
-
-    if (status === 'correct') {
-      return `${baseStyle} bg-green-500 text-white`;
-    } else if (status === 'present') {
-      return `${baseStyle} bg-yellow-500 text-white`;
-    } else if (status === 'absent') {
-      return `${baseStyle} ${
-        darkMode
-          ? 'bg-gray-700 text-white'
-          : 'bg-gray-400 text-white'
-      }`;
-    }
-
-    return `${baseStyle} ${
-      darkMode
-        ? 'bg-gray-600 text-white hover:bg-gray-500'
-        : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-    }`;
   };
 
   const keyboard = [
@@ -819,402 +950,371 @@ const Wordle = () => {
     ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '⌫']
   ];
 
-  const calculateStats = () => {
-    const totalGames = gameHistory.length;
-    const wins = gameHistory.filter(g => g.won).length;
-    const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
-
-    const guessDistribution = [0, 0, 0, 0, 0, 0];
-    gameHistory.filter(g => g.won).forEach(game => {
-      if (game.guesses >= 1 && game.guesses <= 6) {
-        guessDistribution[game.guesses - 1]++;
-      }
-    });
-
-    return { totalGames, wins, winRate, guessDistribution };
-  };
-
-  const stats = calculateStats();
-
-  const setCustomWordHandler = async () => {
-    if (customWord.length !== wordLength) {
-      setError(`Word must be exactly ${wordLength} letters`);
-      return;
-    }
-
-    const upperWord = customWord.toUpperCase();
-    const isValid = await validateWord(upperWord);
-
-    if (!isValid) {
-      setError('Please enter a valid English word');
-      return;
-    }
-
-    setTargetWord(upperWord);
-    setCustomWord('');
-    setIsPlayingTodayWord(false);
-    resetGame();
-  };
+  const stats = getGameStats(gameHistory);
 
   return (
-    <div className={`min-h-screen ${
-      darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-purple-100 to-blue-100'
-    } flex items-center justify-center p-2 sm:p-4 transition-colors duration-300`}>
-      <div className={`w-full max-w-md sm:max-w-lg ${
-        darkMode ? 'bg-gray-800' : 'bg-white'
-      } rounded-xl shadow-2xl p-4 sm:p-6 md:p-8`}>
-
-        {/* Header with Dark Mode, Notification, and Stats Toggle */}
-        <div className="flex justify-between items-center mb-4">
-          <button
-            onClick={toggleDarkMode}
-            className={`p-2 rounded-lg ${
-              darkMode
-                ? 'bg-gray-700 hover:bg-gray-600 text-yellow-400'
-                : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-            }`}
-            title="Toggle Dark Mode"
-          >
-            {darkMode ? '☀️' : '🌙'}
-          </button>
-
-          <h1 className={`text-2xl sm:text-3xl md:text-4xl font-bold text-center ${
-            darkMode ? 'text-white' : 'text-purple-600'
-          }`}>
-            Wordle Game
-          </h1>
-
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} flex flex-col items-center justify-center p-2 sm:p-4 transition-colors duration-300`}>
+      <div className="max-w-md w-full px-2 sm:px-0">
+        <div className="flex justify-between items-center mb-6 sm:mb-8">
+          <h1 className={`text-3xl sm:text-4xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Wordle</h1>
           <div className="flex gap-2">
             <button
-              onClick={() => setShowNotificationSettings(!showNotificationSettings)}
-              className={`p-2 rounded-lg ${
-                darkMode
-                  ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                  : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-              } ${notificationsEnabled ? 'ring-2 ring-green-500' : ''}`}
-              title="Notification Settings"
+              onClick={handleShowTodayResult}
+              disabled={!isTodayWordCompleted()}
+              className={`px-3 py-2 rounded text-sm font-semibold transition-all ${
+                isTodayWordCompleted()
+                  ? 'bg-purple-500 text-white hover:bg-purple-600 cursor-pointer'
+                  : darkMode
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+              title={isTodayWordCompleted() ? "View Today's Result" : "Complete today's word first"}
             >
-              🔔
+              📋 Today
+            </button>
+            <button
+              onClick={toggleDarkMode}
+              className={`px-3 py-2 rounded hover:opacity-80 text-sm font-semibold transition-all ${
+                darkMode ? 'bg-gray-700 text-yellow-300' : 'bg-gray-200 text-gray-800'
+              }`}
+              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {darkMode ? '☀️' : '🌙'}
+            </button>
+            <button
+              onClick={() => setShowDailyStats(!showDailyStats)}
+              className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm font-semibold"
+              title="Daily Word Lifetime Stats"
+            >
+              🏅 Daily
             </button>
             <button
               onClick={() => setShowStats(!showStats)}
-              className={`p-2 rounded-lg ${
-                darkMode
-                  ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                  : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-              }`}
-              title="View Statistics"
+              className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm font-semibold"
             >
-              📊
+              📊 Stats
             </button>
           </div>
         </div>
 
-        {/* Notification Settings Modal */}
-        {showNotificationSettings && (
-          <div className={`mb-4 p-4 rounded-lg ${
-            darkMode
-              ? 'bg-gray-700 border border-gray-600'
-              : 'bg-blue-50 border border-blue-200'
-          }`}>
-            <h3 className={`font-bold mb-3 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-              Daily Reminder Settings
-            </h3>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Enable Daily Reminders
-                </span>
-                <button
-                  onClick={toggleNotifications}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    notificationsEnabled ? 'bg-green-500' : darkMode ? 'bg-gray-600' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      notificationsEnabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
+        {/* Streak Display - Always visible */}
+        <div className={`mb-4 p-3 rounded-lg shadow-sm ${
+          darkMode
+            ? 'bg-gradient-to-r from-orange-900 to-yellow-900 border-2 border-orange-600'
+            : 'bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-300'
+        }`}>
+          <div className="flex justify-around items-center">
+            <div className="text-center">
+              <div className={`text-3xl font-bold ${darkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+                🔥 {currentStreak}
               </div>
-
-              {notificationsEnabled && (
-                <div>
-                  <label className={`block text-sm mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Reminder Time:
-                  </label>
-                  <input
-                    type="time"
-                    value={notificationTime}
-                    onChange={(e) => updateNotificationTime(e.target.value)}
-                    className={`w-full px-3 py-2 rounded border ${
-                      darkMode
-                        ? 'bg-gray-600 border-gray-500 text-white'
-                        : 'bg-white border-gray-300 text-gray-800'
-                    }`}
-                  />
-                  <p className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    You'll receive a reminder to play Wordle at this time each day (if you haven't completed today's word)
-                  </p>
-                </div>
-              )}
-
-              {notificationPermission === 'denied' && (
-                <div className={`text-xs p-2 rounded ${
-                  darkMode ? 'bg-red-900 text-red-200' : 'bg-red-100 text-red-700'
-                }`}>
-                  Notifications are blocked. Please enable them in your browser settings.
-                </div>
-              )}
-
-              {notificationsEnabled && notificationPermission === 'granted' && (
-                <button
-                  onClick={sendNotification}
-                  className={`w-full px-3 py-2 text-sm rounded ${
-                    darkMode
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-blue-500 hover:bg-blue-600 text-white'
-                  }`}
-                >
-                  Test Notification
-                </button>
-              )}
+              <div className={`text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                Current Streak
+              </div>
             </div>
+            <div className="text-center">
+              <div className={`text-3xl font-bold ${darkMode ? 'text-orange-300' : 'text-orange-500'}`}>
+                🏆 {maxStreak}
+              </div>
+              <div className={`text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                Best Streak
+              </div>
+            </div>
+          </div>
+          <div className={`mt-2 text-center text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            {isTodayWordCompleted() ?
+              "You've completed today's word! Come back tomorrow." :
+              isPlayingTodayWord ?
+              "Win today's word to keep your streak alive!" :
+              "Practice mode - doesn't affect your streak"
+            }
+          </div>
+        </div>
 
-            <button
-              onClick={() => setShowNotificationSettings(false)}
-              className={`w-full mt-3 px-3 py-2 text-sm rounded ${
-                darkMode
-                  ? 'bg-gray-600 hover:bg-gray-500 text-white'
-                  : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-              }`}
-            >
-              Close
-            </button>
+        {/* Today's Game Completed Notice - Only show when today's word is completed */}
+        {isPlayingTodayWord && isTodayWordCompleted() && gameStatus !== 'playing' && (
+          <div className={`mb-4 p-3 rounded-lg text-center ${
+            darkMode
+              ? 'bg-blue-900 border-2 border-blue-600'
+              : 'bg-blue-50 border-2 border-blue-300'
+          }`}>
+            <div className={`text-sm font-semibold ${darkMode ? 'text-blue-300' : 'text-blue-800'}`}>
+              📅 This was today's word
+            </div>
+            <div className={`text-xs mt-1 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+              Come back tomorrow for a new word, or click "New Word" to practice!
+            </div>
           </div>
         )}
 
-        {/* Today's Word Indicator */}
-        {isPlayingTodayWord && (
-          <div className="text-center mb-4">
-            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
-              darkMode
-                ? 'bg-purple-900 text-purple-200 border border-purple-700'
-                : 'bg-purple-200 text-purple-800 border border-purple-300'
-            }`}>
-              📅 Today's Word
-              {todayWordCompleted && (
-                <span className="ml-2">✓ Completed</span>
-              )}
+        {/* Practice Mode Notice - Show when playing practice word after completing today's word */}
+        {!isPlayingTodayWord && isTodayWordCompleted() && gameStatus === 'playing' && (
+          <div className={`mb-4 p-3 rounded-lg text-center ${
+            darkMode
+              ? 'bg-green-900 border-2 border-green-600'
+              : 'bg-green-50 border-2 border-green-300'
+          }`}>
+            <div className={`text-sm font-semibold ${darkMode ? 'text-green-300' : 'text-green-800'}`}>
+              🎮 Practice Mode
             </div>
-            {todayWordCompleted && (
-              <button
-                onClick={handleShowTodayResult}
-                className="mt-2 text-sm text-blue-500 hover:text-blue-600 underline"
-              >
-                View Today's Result
-              </button>
+            <div className={`text-xs mt-1 ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
+              This game won't affect your streak. Click "📋 Today" to see your daily result!
+            </div>
+          </div>
+        )}
+
+        {/* Daily Word Lifetime Statistics Panel */}
+        {showDailyStats && (
+          <div className={`mb-6 p-4 rounded-lg shadow-sm ${
+            darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            <h2 className={`text-xl font-bold mb-4 text-center ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+              🏅 Daily Word Lifetime Stats
+            </h2>
+            <div className={`text-center mb-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              Track your performance across all daily words
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-center mb-4">
+              <div className="col-span-2">
+                <div className="text-3xl font-bold text-green-600">{dailyWordStats.totalWins}</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Daily Wins</div>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <h3 className={`text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                Wins by Attempt
+              </h3>
+              {[1, 2, 3, 4, 5, 6].map((attemptNum) => {
+                const count = dailyWordStats[`attempt${attemptNum}`] || 0;
+                const percentage = dailyWordStats.totalWins > 0
+                  ? (count / dailyWordStats.totalWins) * 100
+                  : 0;
+
+                return (
+                  <div key={attemptNum} className="flex items-center mb-2">
+                    <span className={`text-sm w-12 font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {attemptNum} {attemptNum === 1 ? 'try' : 'tries'}
+                    </span>
+                    <div className={`flex-1 mx-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} h-8 relative overflow-hidden`}>
+                      <div
+                        className="bg-gradient-to-r from-green-500 to-green-600 h-full flex items-center justify-end px-2 transition-all duration-500 ease-out rounded"
+                        style={{
+                          width: `${Math.max(percentage, count > 0 ? 15 : 0)}%`,
+                        }}
+                      >
+                        {count > 0 && (
+                          <span className="text-white text-sm font-bold">
+                            {count}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className={`text-xs w-12 text-right ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {percentage > 0 ? percentage.toFixed(0) : 0}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {dailyWordStats.totalWins > 0 && (
+              <div className={`mt-4 p-3 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-50'} text-center`}>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Average Attempts: <span className="font-bold text-blue-600">
+                    {(
+                      ([1,2,3,4,5,6].reduce((sum, num) =>
+                        sum + (num * (dailyWordStats[`attempt${num}`] || 0)), 0
+                      )) / dailyWordStats.totalWins
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {dailyWordStats.totalWins === 0 && (
+              <div className={`text-center text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'} italic`}>
+                Complete daily words to see your stats here!
+              </div>
             )}
           </div>
         )}
 
-        {/* Custom Word Input */}
-        <div className={`mb-4 p-3 rounded-lg ${
-          darkMode
-            ? 'bg-gray-700 border border-gray-600'
-            : 'bg-gray-50 border border-gray-200'
-        }`}>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={customWord}
-              onChange={(e) => setCustomWord(e.target.value.toUpperCase())}
-              placeholder="Enter custom word..."
-              maxLength={wordLength}
-              className={`flex-1 px-3 py-2 text-sm rounded border ${
-                darkMode
-                  ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400'
-                  : 'bg-white border-gray-300 text-gray-800 placeholder-gray-500'
-              }`}
-              disabled={gameStatus !== 'playing' || isValidating}
-            />
-            <button
-              onClick={setCustomWordHandler}
-              className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm font-semibold disabled:opacity-50"
-              disabled={gameStatus !== 'playing' || isValidating}
-            >
-              Set
-            </button>
-          </div>
-        </div>
-
-        {/* Statistics Modal */}
+        {/* Statistics Panel */}
         {showStats && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className={`${
-              darkMode ? 'bg-gray-800' : 'bg-white'
-            } rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto`}>
+          <div className={`mb-6 p-4 rounded-lg shadow-sm ${
+            darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            <h2 className={`text-xl font-bold mb-4 text-center ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+              Today's Statistics
+            </h2>
+            <div className="grid grid-cols-4 gap-4 text-center mb-4">
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{stats.totalGames}</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Games</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">{stats.wins}</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Wins</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-red-600">{stats.losses}</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Losses</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-purple-600">{stats.winPercentage}%</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Win Rate</div>
+              </div>
+            </div>
+
+            {stats.totalGames > 0 && (
+              <>
+                <div className="mb-4">
+                  <h3 className={`text-sm font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                    Guess Distribution
+                  </h3>
+                  {stats.guessDistribution.map((count, index) => (
+                    <div key={index} className="flex items-center mb-1">
+                      <span className={`text-xs w-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {index + 1}
+                      </span>
+                      <div className={`flex-1 mx-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                        <div
+                          className="bg-green-500 text-white text-xs text-center rounded px-1"
+                          style={{ width: `${stats.wins > 0 ? (count / stats.wins) * 100 : 0}%`, minWidth: count > 0 ? '20px' : '0' }}
+                        >
+                          {count > 0 ? count : ''}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <h3 className={`text-sm font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                    Recent Games
+                  </h3>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {gameHistory.slice(-5).reverse().map((game, index) => (
+                      <div key={index} className={`flex justify-between items-center text-xs p-2 rounded ${
+                        darkMode ? 'bg-gray-700' : 'bg-gray-50'
+                      }`}>
+                        <span className={`font-mono ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                          {game.word}
+                        </span>
+                        <span className={`font-semibold ${game.won ? 'text-green-600' : 'text-red-600'}`}>
+                          {game.won ? `✓ ${game.guesses}/6` : '✗ Lost'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Notification Settings Section */}
+            <div className={`mt-6 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <h3 className={`text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                🔔 Daily Reminders
+              </h3>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Enable Notifications
+                  </span>
+                  <button
+                    onClick={toggleNotifications}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      notificationsEnabled ? 'bg-green-500' : darkMode ? 'bg-gray-600' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationsEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {notificationsEnabled && (
+                  <div>
+                    <label className={`block text-xs mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Reminder Time:
+                    </label>
+                    <input
+                      type="time"
+                      value={notificationTime}
+                      onChange={(e) => updateNotificationTime(e.target.value)}
+                      className={`w-full px-3 py-2 text-sm rounded border ${
+                        darkMode
+                          ? 'bg-gray-700 border-gray-600 text-white'
+                          : 'bg-white border-gray-300 text-gray-800'
+                      }`}
+                    />
+                    <p className={`text-xs mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                      Get reminded to play at this time daily
+                    </p>
+                  </div>
+                )}
+
+                {notificationPermission === 'denied' && (
+                  <div className={`text-xs p-2 rounded ${
+                    darkMode ? 'bg-red-900 text-red-200' : 'bg-red-100 text-red-700'
+                  }`}>
+                    Notifications blocked. Enable in browser settings.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Today's Result Modal */}
+        {showTodayModal && todayGameData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowTodayModal(false)}>
+            <div
+              className={`max-w-md w-full rounded-lg shadow-2xl p-4 sm:p-6 max-h-[90vh] overflow-y-auto ${
+                darkMode ? 'bg-gray-800' : 'bg-white'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex justify-between items-center mb-4">
-                <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                  Statistics
+                <h2 className={`text-xl sm:text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+                  📅 Today's Result
                 </h2>
                 <button
-                  onClick={() => setShowStats(false)}
-                  className={`text-2xl ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-800'}`}
+                  onClick={() => setShowTodayModal(false)}
+                  className={`text-2xl font-bold ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-800'}`}
                 >
                   ×
                 </button>
               </div>
 
-              {/* Overall Stats */}
-              <div className="grid grid-cols-4 gap-2 mb-6">
-                <div className={`text-center p-3 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                  <div className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                    {stats.totalGames}
-                  </div>
-                  <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Played
-                  </div>
-                </div>
-                <div className={`text-center p-3 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                  <div className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                    {stats.winRate}%
-                  </div>
-                  <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Win %
-                  </div>
-                </div>
-                <div className={`text-center p-3 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                  <div className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                    {currentStreak}
-                  </div>
-                  <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Current
-                  </div>
-                </div>
-                <div className={`text-center p-3 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                  <div className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                    {maxStreak}
-                  </div>
-                  <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Max
-                  </div>
-                </div>
-              </div>
-
-              {/* Guess Distribution */}
-              <div className="mb-6">
-                <h3 className={`text-sm font-bold mb-3 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                  Guess Distribution
-                </h3>
-                {stats.guessDistribution.map((count, index) => {
-                  const maxCount = Math.max(...stats.guessDistribution, 1);
-                  const percentage = (count / maxCount) * 100;
-                  return (
-                    <div key={index} className="flex items-center gap-2 mb-2">
-                      <div className={`w-4 text-sm ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                        {index + 1}
-                      </div>
-                      <div className="flex-1">
-                        <div
-                          className="bg-green-500 text-white text-xs px-2 py-1 rounded text-right min-w-[2rem]"
-                          style={{ width: `${Math.max(percentage, 7)}%` }}
-                        >
-                          {count}
-                        </div>
-                      </div>
+              {/* Game Result Status */}
+              <div className="text-center mb-4">
+                {todayGameData.gameStatus === 'won' ? (
+                  <div className="text-green-600 font-bold text-lg">
+                    🎉 You Won! 🎉
+                    <div className="text-sm mt-1">
+                      Solved in {todayGameData.guesses.length}/{maxGuesses} attempts
                     </div>
-                  );
-                })}
+                  </div>
+                ) : (
+                  <div className="text-red-600 font-bold text-lg">
+                    😔 Game Over
+                    <div className="text-sm mt-1">
+                      The word was: {todayGameData.targetWord}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Toggle for Daily Word Stats */}
-              <button
-                onClick={() => setShowDailyStats(!showDailyStats)}
-                className="w-full mb-4 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 font-semibold"
-              >
-                {showDailyStats ? 'Hide' : 'Show'} Daily Word Stats
-              </button>
-
-              {/* Daily Word Stats */}
-              {showDailyStats && (
-                <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-blue-50'}`}>
-                  <h3 className={`text-sm font-bold mb-3 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                    Daily Word Performance
-                  </h3>
-                  <div className="space-y-2">
-                    {[1, 2, 3, 4, 5, 6].map((attempt) => {
-                      const count = dailyWordStats[`attempt${attempt}`] || 0;
-                      const maxCount = Math.max(
-                        ...Object.values(dailyWordStats).filter((v, i) => i < 6),
-                        1
-                      );
-                      const percentage = (count / maxCount) * 100;
-                      return (
-                        <div key={attempt} className="flex items-center gap-2">
-                          <div className={`w-4 text-sm ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                            {attempt}
-                          </div>
-                          <div className="flex-1">
-                            <div
-                              className="bg-blue-500 text-white text-xs px-2 py-1 rounded text-right min-w-[2rem]"
-                              style={{ width: `${Math.max(percentage, 7)}%` }}
-                            >
-                              {count}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className={`mt-3 text-center text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Total Daily Wins: {dailyWordStats.totalWins}
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={() => setShowStats(false)}
-                className="w-full mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 font-semibold"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Today's Word Modal */}
-        {showTodayModal && todayGameData && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className={`${
-              darkMode ? 'bg-gray-800' : 'bg-white'
-            } rounded-lg p-6 max-w-md w-full`}>
-              <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                Today's Word: {todayGameData.targetWord}
-              </h2>
-
-              <div className={`mb-4 text-center p-3 rounded ${
-                todayGameData.gameStatus === 'won'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                <div className="text-lg font-bold">
-                  {todayGameData.gameStatus === 'won' ? '🎉 You Won!' : '😔 You Lost'}
-                </div>
-                <div className="text-sm">
-                  {todayGameData.gameStatus === 'won'
-                    ? `Solved in ${todayGameData.guesses.length} ${todayGameData.guesses.length === 1 ? 'guess' : 'guesses'}`
-                    : `Better luck tomorrow!`
-                  }
-                </div>
-              </div>
-
-              {/* Show guesses */}
-              <div className="grid grid-rows-6 gap-2 mb-4">
+              {/* Game Board */}
+              <div className="grid grid-rows-6 gap-1 sm:gap-2 mb-4">
                 {Array.from({ length: maxGuesses }).map((_, rowIndex) => (
-                  <div key={rowIndex} className="grid grid-cols-5 gap-2">
+                  <div key={rowIndex} className="grid grid-cols-5 gap-1 sm:gap-2">
                     {Array.from({ length: wordLength }).map((_, colIndex) => {
                       let letter = '';
                       let status = '';
@@ -1237,25 +1337,34 @@ const Wordle = () => {
                 ))}
               </div>
 
-              {/* Word meaning */}
+              {/* Word Meaning */}
               {todayGameData.meaning && (
-                <div className={`p-4 rounded-lg text-left ${
+                <div className={`p-3 sm:p-4 rounded-lg ${
                   darkMode
                     ? 'bg-blue-900 border border-blue-700'
                     : 'bg-blue-50 border border-blue-200'
                 }`}>
-                  <h3 className={`font-bold mb-2 ${darkMode ? 'text-blue-300' : 'text-blue-800'}`}>
+                  <h3 className={`font-bold text-base sm:text-lg mb-2 ${
+                    darkMode ? 'text-blue-300' : 'text-blue-800'
+                  }`}>
                     Word: {todayGameData.meaning.word}
                     {todayGameData.meaning.phonetic && (
-                      <span className={`text-sm font-normal ml-2 ${
+                      <span className={`text-xs sm:text-sm font-normal ml-2 ${
                         darkMode ? 'text-blue-400' : 'text-blue-600'
                       }`}>
                         {todayGameData.meaning.phonetic}
                       </span>
                     )}
+                    {todayGameData.meaning.hindi_translation && (
+                      <span className={`text-sm font-normal ml-2 ${
+                        darkMode ? 'text-blue-400' : 'text-blue-600'
+                      }`}>
+                        {todayGameData.meaning.hindi_translation}
+                      </span>
+                    )}
                   </h3>
                   {todayGameData.meaning.meanings && todayGameData.meaning.meanings.map((meaning, index) => (
-                    <div key={index} className="mb-2 text-sm">
+                    <div key={index} className="mb-2 text-sm sm:text-base">
                       <span className={`font-semibold capitalize ${
                         darkMode ? 'text-blue-400' : 'text-blue-700'
                       }`}>
@@ -1378,7 +1487,7 @@ const Wordle = () => {
                   </div>
                 )}
 
-                {/* Word Meaning Display */}
+                {/* Word Meaning Display - Only show when game is over (won OR lost) AND meaning exists */}
                 {(gameStatus === 'won' || gameStatus === 'lost') && wordMeaning && (
                   <div className={`mt-4 p-3 sm:p-4 rounded-lg text-left ${
                     darkMode
