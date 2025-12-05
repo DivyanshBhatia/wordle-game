@@ -106,6 +106,42 @@ const Wordle = () => {
     setDailyWordStats(updatedStats);
   };
 
+  // Helper functions needed by notifications
+  const getTodayDateString = () => {
+    const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const kolkataDate = new Date(today);
+    const year = kolkataDate.getFullYear();
+    const month = String(kolkataDate.getMonth() + 1).padStart(2, '0');
+    const day = String(kolkataDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getTodayGameSession = () => {
+    const sessionData = getCookie('wordleTodaySession');
+    if (sessionData) {
+      try {
+        const data = JSON.parse(decodeURIComponent(sessionData));
+        const today = getTodayDateString();
+
+        if (data.date === today) {
+          return data;
+        } else {
+          deleteCookie('wordleTodaySession');
+          return null;
+        }
+      } catch (error) {
+        console.error('Error parsing today session:', error);
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const isTodayWordCompleted = () => {
+    const todaySession = getTodayGameSession();
+    return todaySession && (todaySession.gameStatus === 'won' || todaySession.gameStatus === 'lost');
+  };
+
   // Notification management functions
   const loadNotificationPreferences = () => {
     const enabled = getCookie('wordleNotificationsEnabled') === 'true';
@@ -145,7 +181,7 @@ const Wordle = () => {
     }
   };
 
-  const scheduleNotification = useCallback(() => {
+  const scheduleNotification = () => {
     if (!notificationsEnabled || notificationPermission !== 'granted') {
       return;
     }
@@ -169,11 +205,10 @@ const Wordle = () => {
 
     const timeoutId = setTimeout(() => {
       sendNotification();
-      scheduleNotification();
     }, timeUntilNotification);
 
     setCookie('wordleNotificationTimeout', timeoutId.toString(), 1);
-  }, [notificationsEnabled, notificationTime, notificationPermission]);
+  };
 
   const toggleNotifications = async () => {
     if (!notificationsEnabled) {
@@ -223,36 +258,27 @@ const Wordle = () => {
     if (notificationsEnabled && notificationPermission === 'granted') {
       scheduleNotification();
     }
-  }, [notificationsEnabled, notificationTime, notificationPermission, scheduleNotification]);
+  }, [notificationsEnabled, notificationTime, notificationPermission]);
 
   // Check for notification on page load
   useEffect(() => {
-    const checkAndNotify = () => {
-      if (notificationsEnabled && notificationPermission === 'granted') {
-        const lastNotificationDate = getCookie('wordleLastNotification');
-        const today = getTodayDateString();
+    if (notificationsEnabled && notificationPermission === 'granted') {
+      const lastNotificationDate = getCookie('wordleLastNotification');
+      const today = getTodayDateString();
 
-        if (lastNotificationDate !== today) {
-          const now = new Date();
-          const [hours, minutes] = notificationTime.split(':').map(Number);
-          const currentHour = now.getHours();
-          const currentMinute = now.getMinutes();
+      if (lastNotificationDate !== today) {
+        const now = new Date();
+        const [hours, minutes] = notificationTime.split(':').map(Number);
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
 
-          if (currentHour === hours && Math.abs(currentMinute - minutes) <= 5) {
-            sendNotification();
-            setCookie('wordleLastNotification', today, 1);
-          }
+        if (currentHour === hours && Math.abs(currentMinute - minutes) <= 5) {
+          sendNotification();
+          setCookie('wordleLastNotification', today, 1);
         }
       }
-    };
-
-    checkAndNotify();
-  }, [notificationsEnabled, notificationTime, notificationPermission]);
-
-  const isTodayWordCompleted = () => {
-    const todaySession = getTodayGameSession();
-    return todaySession && (todaySession.gameStatus === 'won' || todaySession.gameStatus === 'lost');
-  };
+    }
+  }, []);
 
   const handleShowTodayResult = async () => {
     const todaySession = getTodayGameSession();
@@ -270,16 +296,6 @@ const Wordle = () => {
     }
   };
 
-  const getTodayDateString = () => {
-    // Get current date in Asia/Kolkata timezone
-    const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-    const kolkataDate = new Date(today);
-    const year = kolkataDate.getFullYear();
-    const month = String(kolkataDate.getMonth() + 1).padStart(2, '0');
-    const day = String(kolkataDate.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`; // YYYY-MM-DD format in IST
-  };
-
   const getYesterdayDateString = () => {
     // Get yesterday's date in Asia/Kolkata timezone
     const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
@@ -292,29 +308,6 @@ const Wordle = () => {
   };
 
   // Today's game session management
-  const getTodayGameSession = () => {
-    const sessionData = getCookie('wordleTodaySession');
-    if (sessionData) {
-      try {
-        const data = JSON.parse(decodeURIComponent(sessionData));
-        const today = getTodayDateString();
-
-        // Check if session is for today (in IST timezone)
-        if (data.date === today) {
-          return data;
-        } else {
-          // Old session (from before today's IST midnight), clear it
-          deleteCookie('wordleTodaySession');
-          return null;
-        }
-      } catch (error) {
-        console.error('Error parsing today session:', error);
-        return null;
-      }
-    }
-    return null;
-  };
-
   const saveTodayGameSession = (sessionData) => {
     setCookie('wordleTodaySession', encodeURIComponent(JSON.stringify(sessionData)), 1);
   };
