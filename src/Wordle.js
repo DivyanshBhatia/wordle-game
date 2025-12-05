@@ -36,9 +36,35 @@ const Wordle = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationTime, setNotificationTime] = useState('09:00');
   const [notificationPermission, setNotificationPermission] = useState('default');
+  const [serviceWorkerRegistration, setServiceWorkerRegistration] = useState(null);
 
   const maxGuesses = 6;
   const wordLength = 5;
+
+  // Register Service Worker
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/wordle-service-worker.js')
+        .then((registration) => {
+          console.log('Service Worker registered:', registration);
+          setServiceWorkerRegistration(registration);
+
+          // Set up message listener from service worker
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data.type === 'GET_NOTIFICATION_SETTINGS') {
+              // Send current settings to service worker
+              sendSettingsToServiceWorker(registration);
+            } else if (event.data.type === 'SHOULD_NOTIFY') {
+              // Check if we should send notification
+              handleNotificationCheck(registration);
+            }
+          });
+        })
+        .catch((error) => {
+          console.error('Service Worker registration failed:', error);
+        });
+    }
+  }, []);
 
   // Cookie management functions
   const getCookie = (name) => {
@@ -165,49 +191,92 @@ const Wordle = () => {
     return permission === 'granted';
   };
 
-  const sendNotification = () => {
-    if (notificationPermission === 'granted' && notificationsEnabled) {
-      const todayCompleted = isTodayWordCompleted();
-
-      if (!todayCompleted) {
-        new Notification('Wordle Daily Reminder! 📝', {
-          body: "Don't forget to play today's word! Keep your streak going! 🔥",
-          icon: '📝',
-          badge: '📝',
-          tag: 'wordle-daily-reminder',
-          requireInteraction: false
-        });
-      }
+  const sendSettingsToServiceWorker = (registration) => {
+    if (registration && registration.active) {
+      registration.active.postMessage({
+        type: 'NOTIFICATION_SETTINGS',
+        notificationTime: notificationTime,
+        enabled: notificationsEnabled,
+        todayCompleted: isTodayWordCompleted()
+      });
     }
   };
 
-  const scheduleNotification = () => {
+  const handleNotificationCheck = (registration) => {
     if (!notificationsEnabled || notificationPermission !== 'granted') {
       return;
     }
 
-    const now = new Date();
+    const lastNotificationDate = getCookie('wordleLastNotification');
+    const today = getTodayDateString();
+
+    // Only send once per day
+    if (lastNotificationDate === today) {
+      return;
+    }
+
+    // Check if today's word is completed
+    if (isTodayWordCompleted()) {
+      return;
+    }
+
+    // Get current time in IST
+    const nowIST = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const now = new Date(nowIST);
+
     const [hours, minutes] = notificationTime.split(':').map(Number);
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
 
-    const scheduledTime = new Date();
-    scheduledTime.setHours(hours, minutes, 0, 0);
+    // Check if we're within 1 hour after the notification time
+    const notificationMinutes = hours * 60 + minutes;
+    const currentMinutes = currentHour * 60 + currentMinute;
+    const minutesDiff = currentMinutes - notificationMinutes;
 
-    if (scheduledTime <= now) {
-      scheduledTime.setDate(scheduledTime.getDate() + 1);
+    // Send if we're within 1 hour after the notification time
+    if (minutesDiff >= 0 && minutesDiff <= 60) {
+      sendNotificationViaServiceWorker(registration);
+      setCookie('wordleLastNotification', today, 1);
+    }
+  };
+
+  const sendNotificationViaServiceWorker = (registration) => {
+    if (registration && registration.active) {
+      registration.showNotification('Wordle Daily Reminder! 📝', {
+        body: "Don't forget to play today's word! Keep your streak going! 🔥",
+        icon: '📝',
+        badge: '📝',
+        tag: 'wordle-daily-reminder',
+        requireInteraction: false,
+        data: {
+          url: window.location.origin
+        }
+      });
+    }
+  };
+
+  const scheduleNotification = () => {
+    if (!notificationsEnabled || notificationPermission !== 'granted' || !serviceWorkerRegistration) {
+      return;
     }
 
-    const timeUntilNotification = scheduledTime - now;
-
-    const existingTimeout = getCookie('wordleNotificationTimeout');
-    if (existingTimeout) {
-      clearTimeout(parseInt(existingTimeout));
+    // Send schedule message to service worker
+    if (serviceWorkerRegistration.active) {
+      serviceWorkerRegistration.active.postMessage({
+        type: 'SCHEDULE_NOTIFICATION',
+        notificationTime: notificationTime,
+        enabled: notificationsEnabled
+      });
     }
 
-    const timeoutId = setTimeout(() => {
-      sendNotification();
-    }, timeUntilNotification);
-
-    setCookie('wordleNotificationTimeout', timeoutId.toString(), 1);
+    // Try to register periodic background sync if available
+    if ('periodicSync' in serviceWorkerRegistration) {
+      serviceWorkerRegistration.periodicSync.register('check-wordle-notification', {
+        minInterval: 60 * 60 * 1000 // Check every hour
+      }).catch((error) => {
+        console.log('Periodic Background Sync not available:', error);
+      });
+    }
   };
 
   const toggleNotifications = async () => {
@@ -253,32 +322,59 @@ const Wordle = () => {
     loadNotificationPreferences();
   }, []);
 
+  const checkAndSendNotification = () => {
+    if (!notificationsEnabled || notificationPermission !== 'granted' || !serviceWorkerRegistration) {
+      return;
+    }
+
+    const lastNotificationDate = getCookie('wordleLastNotification');
+    const today = getTodayDateString();
+
+    // Only send once per day
+    if (lastNotificationDate === today) {
+      return;
+    }
+
+    // Check if today's word is completed
+    if (isTodayWordCompleted()) {
+      return;
+    }
+
+    // Get current time in IST
+    const nowIST = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const now = new Date(nowIST);
+
+    const [hours, minutes] = notificationTime.split(':').map(Number);
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    // Check if we're within 1 hour after the notification time (expanded window)
+    const notificationMinutes = hours * 60 + minutes;
+    const currentMinutes = currentHour * 60 + currentMinute;
+    const minutesDiff = currentMinutes - notificationMinutes;
+
+    // Send if we're within 1 hour after the notification time
+    if (minutesDiff >= 0 && minutesDiff <= 60) {
+      sendNotificationViaServiceWorker(serviceWorkerRegistration);
+      setCookie('wordleLastNotification', today, 1);
+    }
+  };
+
   // Schedule notifications when enabled and time changes
   useEffect(() => {
-    if (notificationsEnabled && notificationPermission === 'granted') {
+    if (notificationsEnabled && notificationPermission === 'granted' && serviceWorkerRegistration) {
       scheduleNotification();
+      // Also check if we should send notification now
+      checkAndSendNotification();
     }
-  }, [notificationsEnabled, notificationTime, notificationPermission]);
+  }, [notificationsEnabled, notificationTime, notificationPermission, serviceWorkerRegistration]);
 
   // Check for notification on page load
   useEffect(() => {
-    if (notificationsEnabled && notificationPermission === 'granted') {
-      const lastNotificationDate = getCookie('wordleLastNotification');
-      const today = getTodayDateString();
-
-      if (lastNotificationDate !== today) {
-        const now = new Date();
-        const [hours, minutes] = notificationTime.split(':').map(Number);
-        const currentHour = now.getHours();
-        const currentMinute = now.getMinutes();
-
-        if (currentHour === hours && Math.abs(currentMinute - minutes) <= 5) {
-          sendNotification();
-          setCookie('wordleLastNotification', today, 1);
-        }
-      }
+    if (notificationsEnabled && notificationPermission === 'granted' && serviceWorkerRegistration) {
+      checkAndSendNotification();
     }
-  }, []);
+  }, [serviceWorkerRegistration]);
 
   const handleShowTodayResult = async () => {
     const todaySession = getTodayGameSession();
@@ -1234,7 +1330,7 @@ const Wordle = () => {
                 {notificationsEnabled && (
                   <div>
                     <label className={`block text-xs mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Reminder Time:
+                      Reminder Time (IST):
                     </label>
                     <input
                       type="time"
@@ -1247,8 +1343,39 @@ const Wordle = () => {
                       }`}
                     />
                     <p className={`text-xs mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                      Get reminded to play at this time daily
+                      Time is in IST (India Standard Time). You'll be reminded if you open the page within 1 hour after this time.
                     </p>
+
+                    <button
+                      onClick={() => {
+                        if (serviceWorkerRegistration && serviceWorkerRegistration.active) {
+                          serviceWorkerRegistration.active.postMessage({
+                            type: 'TEST_NOTIFICATION'
+                          });
+                        } else {
+                          // Fallback to regular notification if SW not ready
+                          new Notification('Test Notification! 🎉', {
+                            body: "Your Wordle notifications are working perfectly!",
+                            icon: '📝',
+                            tag: 'wordle-test'
+                          });
+                        }
+                      }}
+                      className={`w-full mt-3 px-3 py-2 text-sm rounded font-semibold ${
+                        darkMode
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                          : 'bg-blue-500 hover:bg-blue-600 text-white'
+                      }`}
+                    >
+                      🧪 Test Notification
+                    </button>
+
+                    <div className={`mt-3 p-2 rounded text-xs ${
+                      darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <strong>✨ Background Notifications Active!</strong><br/>
+                      You'll receive notifications at your set time even when the page is closed. The notification works when your browser is open (any tab).
+                    </div>
                   </div>
                 )}
 
