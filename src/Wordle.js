@@ -32,39 +32,8 @@ const Wordle = () => {
     totalWins: 0
   });
 
-  // Notification states
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [notificationTime, setNotificationTime] = useState('09:00');
-  const [notificationPermission, setNotificationPermission] = useState('default');
-  const [serviceWorkerRegistration, setServiceWorkerRegistration] = useState(null);
-
   const maxGuesses = 6;
   const wordLength = 5;
-
-  // Register Service Worker
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/wordle-service-worker.js')
-        .then((registration) => {
-          console.log('Service Worker registered:', registration);
-          setServiceWorkerRegistration(registration);
-
-          // Set up message listener from service worker
-          navigator.serviceWorker.addEventListener('message', (event) => {
-            if (event.data.type === 'GET_NOTIFICATION_SETTINGS') {
-              // Send current settings to service worker
-              sendSettingsToServiceWorker(registration);
-            } else if (event.data.type === 'SHOULD_NOTIFY') {
-              // Check if we should send notification
-              handleNotificationCheck(registration);
-            }
-          });
-        })
-        .catch((error) => {
-          console.error('Service Worker registration failed:', error);
-        });
-    }
-  }, []);
 
   // Cookie management functions
   const getCookie = (name) => {
@@ -132,176 +101,6 @@ const Wordle = () => {
     setDailyWordStats(updatedStats);
   };
 
-  // Helper functions needed by notifications
-  const getTodayDateString = () => {
-    const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-    const kolkataDate = new Date(today);
-    const year = kolkataDate.getFullYear();
-    const month = String(kolkataDate.getMonth() + 1).padStart(2, '0');
-    const day = String(kolkataDate.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const getTodayGameSession = () => {
-    const sessionData = getCookie('wordleTodaySession');
-    if (sessionData) {
-      try {
-        const data = JSON.parse(decodeURIComponent(sessionData));
-        const today = getTodayDateString();
-
-        if (data.date === today) {
-          return data;
-        } else {
-          deleteCookie('wordleTodaySession');
-          return null;
-        }
-      } catch (error) {
-        console.error('Error parsing today session:', error);
-        return null;
-      }
-    }
-    return null;
-  };
-
-  const isTodayWordCompleted = () => {
-    const todaySession = getTodayGameSession();
-    return todaySession && (todaySession.gameStatus === 'won' || todaySession.gameStatus === 'lost');
-  };
-
-  // Notification management functions
-  const loadNotificationPreferences = () => {
-    const enabled = getCookie('wordleNotificationsEnabled') === 'true';
-    const time = getCookie('wordleNotificationTime') || '09:00';
-    setNotificationsEnabled(enabled);
-    setNotificationTime(time);
-
-    if ('Notification' in window) {
-      setNotificationPermission(Notification.permission);
-    }
-  };
-
-  const requestNotificationPermission = async () => {
-    if (!('Notification' in window)) {
-      alert('This browser does not support desktop notifications');
-      return false;
-    }
-
-    const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
-    return permission === 'granted';
-  };
-
-  const sendSettingsToServiceWorker = (registration) => {
-    if (registration && registration.active) {
-      registration.active.postMessage({
-        type: 'NOTIFICATION_SETTINGS',
-        notificationTime: notificationTime,
-        enabled: notificationsEnabled,
-        todayCompleted: isTodayWordCompleted()
-      });
-    }
-  };
-
-  const handleNotificationCheck = (registration) => {
-    if (!notificationsEnabled || notificationPermission !== 'granted') {
-      return;
-    }
-
-    const lastNotificationDate = getCookie('wordleLastNotification');
-    const today = getTodayDateString();
-
-    // Only send once per day
-    if (lastNotificationDate === today) {
-      return;
-    }
-
-    // Check if today's word is completed
-    if (isTodayWordCompleted()) {
-      return;
-    }
-
-    // Get current time in IST
-    const nowIST = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-    const now = new Date(nowIST);
-
-    const [hours, minutes] = notificationTime.split(':').map(Number);
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-
-    // Check if we're within 1 hour after the notification time
-    const notificationMinutes = hours * 60 + minutes;
-    const currentMinutes = currentHour * 60 + currentMinute;
-    const minutesDiff = currentMinutes - notificationMinutes;
-
-    // Send if we're within 1 hour after the notification time
-    if (minutesDiff >= 0 && minutesDiff <= 60) {
-      sendNotificationViaServiceWorker(registration);
-      setCookie('wordleLastNotification', today, 1);
-    }
-  };
-
-  const sendNotificationViaServiceWorker = (registration) => {
-    if (registration && registration.active) {
-      registration.showNotification('Wordle Daily Reminder! 📝', {
-        body: "Don't forget to play today's word! Keep your streak going! 🔥",
-        icon: '📝',
-        badge: '📝',
-        tag: 'wordle-daily-reminder',
-        requireInteraction: false,
-        data: {
-          url: window.location.origin
-        }
-      });
-    }
-  };
-
-  const scheduleNotification = () => {
-    if (!notificationsEnabled || notificationPermission !== 'granted' || !serviceWorkerRegistration) {
-      return;
-    }
-
-    // Send schedule message to service worker
-    if (serviceWorkerRegistration.active) {
-      serviceWorkerRegistration.active.postMessage({
-        type: 'SCHEDULE_NOTIFICATION',
-        notificationTime: notificationTime,
-        enabled: notificationsEnabled
-      });
-    }
-
-    // Try to register periodic background sync if available
-    if ('periodicSync' in serviceWorkerRegistration) {
-      serviceWorkerRegistration.periodicSync.register('check-wordle-notification', {
-        minInterval: 60 * 60 * 1000 // Check every hour
-      }).catch((error) => {
-        console.log('Periodic Background Sync not available:', error);
-      });
-    }
-  };
-
-  const toggleNotifications = async () => {
-    if (!notificationsEnabled) {
-      const granted = await requestNotificationPermission();
-      if (granted) {
-        setNotificationsEnabled(true);
-        setCookie('wordleNotificationsEnabled', 'true', 365);
-        scheduleNotification();
-      }
-    } else {
-      setNotificationsEnabled(false);
-      setCookie('wordleNotificationsEnabled', 'false', 365);
-    }
-  };
-
-  const updateNotificationTime = (newTime) => {
-    setNotificationTime(newTime);
-    setCookie('wordleNotificationTime', newTime, 365);
-
-    if (notificationsEnabled && notificationPermission === 'granted') {
-      scheduleNotification();
-    }
-  };
-
   // Load dark mode preference
   useEffect(() => {
     const savedTheme = getCookie('wordleTheme');
@@ -317,64 +116,10 @@ const Wordle = () => {
     setCookie('wordleTheme', newMode ? 'dark' : 'light', 365);
   };
 
-  // Load notification preferences on mount
-  useEffect(() => {
-    loadNotificationPreferences();
-  }, []);
-
-  const checkAndSendNotification = () => {
-    if (!notificationsEnabled || notificationPermission !== 'granted' || !serviceWorkerRegistration) {
-      return;
-    }
-
-    const lastNotificationDate = getCookie('wordleLastNotification');
-    const today = getTodayDateString();
-
-    // Only send once per day
-    if (lastNotificationDate === today) {
-      return;
-    }
-
-    // Check if today's word is completed
-    if (isTodayWordCompleted()) {
-      return;
-    }
-
-    // Get current time in IST
-    const nowIST = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-    const now = new Date(nowIST);
-
-    const [hours, minutes] = notificationTime.split(':').map(Number);
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-
-    // Check if we're within 1 hour after the notification time (expanded window)
-    const notificationMinutes = hours * 60 + minutes;
-    const currentMinutes = currentHour * 60 + currentMinute;
-    const minutesDiff = currentMinutes - notificationMinutes;
-
-    // Send if we're within 1 hour after the notification time
-    if (minutesDiff >= 0 && minutesDiff <= 60) {
-      sendNotificationViaServiceWorker(serviceWorkerRegistration);
-      setCookie('wordleLastNotification', today, 1);
-    }
+  const isTodayWordCompleted = () => {
+    const todaySession = getTodayGameSession();
+    return todaySession && (todaySession.gameStatus === 'won' || todaySession.gameStatus === 'lost');
   };
-
-  // Schedule notifications when enabled and time changes
-  useEffect(() => {
-    if (notificationsEnabled && notificationPermission === 'granted' && serviceWorkerRegistration) {
-      scheduleNotification();
-      // Also check if we should send notification now
-      checkAndSendNotification();
-    }
-  }, [notificationsEnabled, notificationTime, notificationPermission, serviceWorkerRegistration]);
-
-  // Check for notification on page load
-  useEffect(() => {
-    if (notificationsEnabled && notificationPermission === 'granted' && serviceWorkerRegistration) {
-      checkAndSendNotification();
-    }
-  }, [serviceWorkerRegistration]);
 
   const handleShowTodayResult = async () => {
     const todaySession = getTodayGameSession();
@@ -392,6 +137,16 @@ const Wordle = () => {
     }
   };
 
+  const getTodayDateString = () => {
+    // Get current date in Asia/Kolkata timezone
+    const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const kolkataDate = new Date(today);
+    const year = kolkataDate.getFullYear();
+    const month = String(kolkataDate.getMonth() + 1).padStart(2, '0');
+    const day = String(kolkataDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`; // YYYY-MM-DD format in IST
+  };
+
   const getYesterdayDateString = () => {
     // Get yesterday's date in Asia/Kolkata timezone
     const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
@@ -404,6 +159,29 @@ const Wordle = () => {
   };
 
   // Today's game session management
+  const getTodayGameSession = () => {
+    const sessionData = getCookie('wordleTodaySession');
+    if (sessionData) {
+      try {
+        const data = JSON.parse(decodeURIComponent(sessionData));
+        const today = getTodayDateString();
+
+        // Check if session is for today (in IST timezone)
+        if (data.date === today) {
+          return data;
+        } else {
+          // Old session (from before today's IST midnight), clear it
+          deleteCookie('wordleTodaySession');
+          return null;
+        }
+      } catch (error) {
+        console.error('Error parsing today session:', error);
+        return null;
+      }
+    }
+    return null;
+  };
+
   const saveTodayGameSession = (sessionData) => {
     setCookie('wordleTodaySession', encodeURIComponent(JSON.stringify(sessionData)), 1);
   };
@@ -1301,93 +1079,6 @@ const Wordle = () => {
                 </div>
               </>
             )}
-
-            {/* Notification Settings Section */}
-            <div className={`mt-6 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-              <h3 className={`text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
-                🔔 Daily Reminders
-              </h3>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Enable Notifications
-                  </span>
-                  <button
-                    onClick={toggleNotifications}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      notificationsEnabled ? 'bg-green-500' : darkMode ? 'bg-gray-600' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        notificationsEnabled ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {notificationsEnabled && (
-                  <div>
-                    <label className={`block text-xs mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Reminder Time (IST):
-                    </label>
-                    <input
-                      type="time"
-                      value={notificationTime}
-                      onChange={(e) => updateNotificationTime(e.target.value)}
-                      className={`w-full px-3 py-2 text-sm rounded border ${
-                        darkMode
-                          ? 'bg-gray-700 border-gray-600 text-white'
-                          : 'bg-white border-gray-300 text-gray-800'
-                      }`}
-                    />
-                    <p className={`text-xs mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                      Time is in IST (India Standard Time). You'll be reminded if you open the page within 1 hour after this time.
-                    </p>
-
-                    <button
-                      onClick={() => {
-                        if (serviceWorkerRegistration && serviceWorkerRegistration.active) {
-                          serviceWorkerRegistration.active.postMessage({
-                            type: 'TEST_NOTIFICATION'
-                          });
-                        } else {
-                          // Fallback to regular notification if SW not ready
-                          new Notification('Test Notification! 🎉', {
-                            body: "Your Wordle notifications are working perfectly!",
-                            icon: '📝',
-                            tag: 'wordle-test'
-                          });
-                        }
-                      }}
-                      className={`w-full mt-3 px-3 py-2 text-sm rounded font-semibold ${
-                        darkMode
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                          : 'bg-blue-500 hover:bg-blue-600 text-white'
-                      }`}
-                    >
-                      🧪 Test Notification
-                    </button>
-
-                    <div className={`mt-3 p-2 rounded text-xs ${
-                      darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <strong>✨ Background Notifications Active!</strong><br/>
-                      You'll receive notifications at your set time even when the page is closed. The notification works when your browser is open (any tab).
-                    </div>
-                  </div>
-                )}
-
-                {notificationPermission === 'denied' && (
-                  <div className={`text-xs p-2 rounded ${
-                    darkMode ? 'bg-red-900 text-red-200' : 'bg-red-100 text-red-700'
-                  }`}>
-                    Notifications blocked. Enable in browser settings.
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         )}
 
