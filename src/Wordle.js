@@ -356,26 +356,35 @@ const Wordle = () => {
   };
 
   const pronounceWord = (word) => {
-    if ('speechSynthesis' in window) {
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
+    // Try using an audio API first for better pronunciation
+    const audioUrl = `https://api.dictionaryapi.dev/media/pronunciations/en/${word.toLowerCase()}-us.mp3`;
+    const audio = new Audio(audioUrl);
 
-      const utterance = new SpeechSynthesisUtterance(word.toLowerCase());
-      utterance.rate = 0.8; // Slightly slower for clarity
-      utterance.pitch = 1;
-      utterance.volume = 1;
+    audio.play().catch(() => {
+      // If audio fails, fall back to speech synthesis
+      if ('speechSynthesis' in window) {
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
 
-      // Try to use an English voice
-      const voices = window.speechSynthesis.getVoices();
-      const englishVoice = voices.find(voice => voice.lang.startsWith('en'));
-      if (englishVoice) {
-        utterance.voice = englishVoice;
+        const utterance = new SpeechSynthesisUtterance(word.toLowerCase());
+        utterance.rate = 0.7; // Slower for clarity
+        utterance.pitch = 1;
+        utterance.volume = 1;
+
+        // Try to use a high-quality English voice
+        const voices = window.speechSynthesis.getVoices();
+        const englishVoice = voices.find(voice =>
+          voice.lang === 'en-US' || voice.lang === 'en-GB' || voice.lang.startsWith('en')
+        );
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+        }
+
+        window.speechSynthesis.speak(utterance);
+      } else {
+        alert('Audio pronunciation is not available');
       }
-
-      window.speechSynthesis.speak(utterance);
-    } else {
-      alert('Text-to-speech is not supported in your browser');
-    }
+    });
   };
 
   const validateWord = async (word) => {
