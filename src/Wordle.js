@@ -355,6 +355,29 @@ const Wordle = () => {
     }
   };
 
+  const pronounceWord = (word) => {
+    if ('speechSynthesis' in window) {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(word.toLowerCase());
+      utterance.rate = 0.8; // Slightly slower for clarity
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      // Try to use an English voice
+      const voices = window.speechSynthesis.getVoices();
+      const englishVoice = voices.find(voice => voice.lang.startsWith('en'));
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+      }
+
+      window.speechSynthesis.speak(utterance);
+    } else {
+      alert('Text-to-speech is not supported in your browser');
+    }
+  };
+
   const validateWord = async (word) => {
     try {
       const meaning = await fetchWordMeaning(word);
@@ -783,19 +806,19 @@ const Wordle = () => {
   };
 
   const getKeyStyle = (letter) => {
-  const baseStyle = "px-2 sm:px-3 py-3 sm:py-4 m-0.5 sm:m-1 rounded font-bold cursor-pointer transition-all duration-200 hover:opacity-80 text-sm sm:text-base";
-  const status = usedLetters[letter];
-  switch (status) {
-    case 'correct':
-      return `${baseStyle} bg-green-500 text-white`;
-    case 'present':
-      return `${baseStyle} bg-yellow-500 text-white`;
-    case 'absent':
-      return `${baseStyle} ${darkMode ? 'bg-gray-900 text-gray-500' : 'bg-gray-500 text-white'}`;
-    default:
-      return `${baseStyle} ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-black'}`;
-  }
-};
+    const baseStyle = "px-2 sm:px-3 py-3 sm:py-4 m-0.5 sm:m-1 rounded font-bold cursor-pointer transition-all duration-200 hover:opacity-80 text-sm sm:text-base";
+    const status = usedLetters[letter];
+    switch (status) {
+      case 'correct':
+        return `${baseStyle} bg-green-500 text-white`;
+      case 'present':
+        return `${baseStyle} bg-yellow-500 text-white`;
+      case 'absent':
+        return `${baseStyle} ${darkMode ? 'bg-gray-900 text-gray-500' : 'bg-gray-500 text-white'}`;
+      default:
+        return `${baseStyle} ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-black'}`;
+    }
+  };
 
   const handleKeyClick = (key) => {
     if (gameStatus !== 'playing' || isValidating) return;
@@ -1155,25 +1178,38 @@ const Wordle = () => {
                     ? 'bg-blue-900 border border-blue-700'
                     : 'bg-blue-50 border border-blue-200'
                 }`}>
-                  <h3 className={`font-bold text-base sm:text-lg mb-2 ${
-                    darkMode ? 'text-blue-300' : 'text-blue-800'
-                  }`}>
-                    Word: {todayGameData.meaning.word}
-                    {todayGameData.meaning.phonetic && (
-                      <span className={`text-xs sm:text-sm font-normal ml-2 ${
-                        darkMode ? 'text-blue-400' : 'text-blue-600'
-                      }`}>
-                        {todayGameData.meaning.phonetic}
-                      </span>
-                    )}
-                    {todayGameData.meaning.hindi_translation && (
-                      <span className={`text-sm font-normal ml-2 ${
-                        darkMode ? 'text-blue-400' : 'text-blue-600'
-                      }`}>
-                        {todayGameData.meaning.hindi_translation}
-                      </span>
-                    )}
-                  </h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className={`font-bold text-base sm:text-lg ${
+                      darkMode ? 'text-blue-300' : 'text-blue-800'
+                    }`}>
+                      Word: {todayGameData.meaning.word}
+                      {todayGameData.meaning.phonetic && (
+                        <span className={`text-xs sm:text-sm font-normal ml-2 ${
+                          darkMode ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
+                          {todayGameData.meaning.phonetic}
+                        </span>
+                      )}
+                      {todayGameData.meaning.hindi_translation && (
+                        <span className={`text-sm font-normal ml-2 ${
+                          darkMode ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
+                          {todayGameData.meaning.hindi_translation}
+                        </span>
+                      )}
+                    </h3>
+                    <button
+                      onClick={() => pronounceWord(todayGameData.meaning.word)}
+                      className={`px-3 py-1 rounded text-sm font-semibold transition-all ${
+                        darkMode
+                          ? 'bg-blue-700 text-blue-200 hover:bg-blue-600'
+                          : 'bg-blue-200 text-blue-800 hover:bg-blue-300'
+                      }`}
+                      title="Pronounce word"
+                    >
+                      🔊 Pronounce
+                    </button>
+                  </div>
                   {todayGameData.meaning.meanings && todayGameData.meaning.meanings.map((meaning, index) => (
                     <div key={index} className="mb-2 text-sm sm:text-base">
                       <span className={`font-semibold capitalize ${
@@ -1305,25 +1341,38 @@ const Wordle = () => {
                       ? 'bg-blue-900 border border-blue-700'
                       : 'bg-blue-50 border border-blue-200'
                   }`}>
-                    <h3 className={`font-bold text-base sm:text-lg mb-2 ${
-                      darkMode ? 'text-blue-300' : 'text-blue-800'
-                    }`}>
-                      Word: {wordMeaning.word}
-                      {wordMeaning.phonetic && (
-                        <span className={`text-xs sm:text-sm font-normal ml-2 ${
-                          darkMode ? 'text-blue-400' : 'text-blue-600'
-                        }`}>
-                          {wordMeaning.phonetic}
-                        </span>
-                      )}
-                      {wordMeaning.hindi_translation && (
-                        <span className={`text-sm font-normal ml-2 ${
-                          darkMode ? 'text-blue-400' : 'text-blue-600'
-                        }`}>
-                          {wordMeaning.hindi_translation}
-                        </span>
-                      )}
-                    </h3>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className={`font-bold text-base sm:text-lg ${
+                        darkMode ? 'text-blue-300' : 'text-blue-800'
+                      }`}>
+                        Word: {wordMeaning.word}
+                        {wordMeaning.phonetic && (
+                          <span className={`text-xs sm:text-sm font-normal ml-2 ${
+                            darkMode ? 'text-blue-400' : 'text-blue-600'
+                          }`}>
+                            {wordMeaning.phonetic}
+                          </span>
+                        )}
+                        {wordMeaning.hindi_translation && (
+                          <span className={`text-sm font-normal ml-2 ${
+                            darkMode ? 'text-blue-400' : 'text-blue-600'
+                          }`}>
+                            {wordMeaning.hindi_translation}
+                          </span>
+                        )}
+                      </h3>
+                      <button
+                        onClick={() => pronounceWord(wordMeaning.word)}
+                        className={`px-3 py-1 rounded text-sm font-semibold transition-all ${
+                          darkMode
+                            ? 'bg-blue-700 text-blue-200 hover:bg-blue-600'
+                            : 'bg-blue-200 text-blue-800 hover:bg-blue-300'
+                        }`}
+                        title="Pronounce word"
+                      >
+                        🔊 Pronounce
+                      </button>
+                    </div>
                     {wordMeaning.meanings && wordMeaning.meanings.map((meaning, index) => (
                       <div key={index} className="mb-2 text-sm sm:text-base">
                         <span className={`font-semibold capitalize ${
