@@ -367,7 +367,7 @@ const Wordle = () => {
         window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(word.toLowerCase());
-        utterance.rate = 0.7; // Slower for clarity
+        utterance.rate = 0.6; // Slower for clarity
         utterance.pitch = 1;
         utterance.volume = 1;
 
