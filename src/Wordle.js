@@ -31,9 +31,47 @@ const Wordle = () => {
     attempt6: 0,
     totalWins: 0
   });
+  const [shareMessage, setShareMessage] = useState('');
 
   const maxGuesses = 6;
   const wordLength = 5;
+
+  // Share result function
+  const shareResult = (guessesData, status, dateString = null) => {
+    const date = dateString || getTodayDateString();
+    const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    const attempts = status === 'won' ? guessesData.length : 'X';
+    const shareText = `🟩 Wordle - ${formattedDate}\n\n${attempts}/${maxGuesses} attempts\n\nPlay at: ${window.location.href}`;
+
+    // Try to use the Web Share API first (for mobile)
+    if (navigator.share) {
+      navigator.share({
+        title: 'Wordle Result',
+        text: shareText
+      }).catch(() => {
+        // Fallback to clipboard if share fails
+        copyToClipboard(shareText);
+      });
+    } else {
+      // Fallback to clipboard for desktop
+      copyToClipboard(shareText);
+    }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setShareMessage('Copied to clipboard!');
+      setTimeout(() => setShareMessage(''), 3000);
+    }).catch(() => {
+      setShareMessage('Failed to copy');
+      setTimeout(() => setShareMessage(''), 3000);
+    });
+  };
 
   // Cookie management functions
   const getCookie = (name) => {
@@ -896,6 +934,15 @@ const Wordle = () => {
           </div>
         </div>
 
+        {/* Share Message Toast */}
+        {shareMessage && (
+          <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg z-50 ${
+            darkMode ? 'bg-green-700 text-white' : 'bg-green-500 text-white'
+          }`}>
+            {shareMessage}
+          </div>
+        )}
+
         {/* Streak Display - Always visible */}
         <div className={`mb-4 p-3 rounded-lg shadow-sm ${
           darkMode
@@ -1154,6 +1201,16 @@ const Wordle = () => {
                 )}
               </div>
 
+              {/* Share Button in Modal */}
+              <div className="text-center mb-4">
+                <button
+                  onClick={() => shareResult(todayGameData.guesses, todayGameData.gameStatus)}
+                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 font-semibold inline-flex items-center gap-2"
+                >
+                  📤 Share Result
+                </button>
+              </div>
+
               {/* Game Board */}
               <div className="grid grid-rows-6 gap-1 sm:gap-2 mb-4">
                 {Array.from({ length: maxGuesses }).map((_, rowIndex) => (
@@ -1340,6 +1397,18 @@ const Wordle = () => {
                         Your streak has been reset. Try again tomorrow!
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Share Button - Only show for today's word */}
+                {isPlayingTodayWord && (
+                  <div className="mt-3">
+                    <button
+                      onClick={() => shareResult(guesses, gameStatus)}
+                      className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 font-semibold inline-flex items-center gap-2"
+                    >
+                      📤 Share Result
+                    </button>
                   </div>
                 )}
 
