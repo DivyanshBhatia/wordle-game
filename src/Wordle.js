@@ -503,25 +503,7 @@ const Wordle = () => {
     } catch (err) {
       console.error('Error fetching today\'s word:', err);
       setError(`Could not fetch today's word: ${err.message}`);
-      setTargetWord('REACT');
-
-      // Fetch meaning for fallback word
-      const meaning = await fetchWordMeaning('REACT');
-      setWordMeaning(meaning || {
-        word: 'REACT',
-        phonetic: '/riˈækt/',
-        meanings: [
-          {
-            partOfSpeech: 'verb',
-            definition: 'respond or behave in a particular way in response to something'
-          }
-        ]
-      });
-
-      setGameStatus('playing');
-      setIsPlayingTodayWord(true);
-      setTodayWordCompleted(false);
-      resetGame();
+      setGameStatus('error');
     }
   };
 
