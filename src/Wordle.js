@@ -974,7 +974,21 @@ const Wordle = () => {
             </div>
           </div>
         )}
-
+        {gameStatus === 'error' && (
+          <div className="text-center mb-6">
+            <div className={/* error styling */}>
+              <div className="text-xl font-bold mb-2">
+                ⚠️ Error Loading Word
+              </div>
+              <div className="text-sm mb-4">
+                {error}  // Shows the actual error message
+              </div>
+              <button onClick={fetchTodaysWord}>
+                🔄 Reload
+              </button>
+            </div>
+          </div>
+        )}
         {/* Practice Mode Notice - Show when playing practice word after completing today's word */}
         {!isPlayingTodayWord && isTodayWordCompleted() && gameStatus === 'playing' && (
           <div className={`mb-4 p-3 rounded-lg text-center ${
@@ -1330,7 +1344,7 @@ const Wordle = () => {
         )}
 
         {/* Game Board */}
-        {gameStatus !== 'loading' && (
+        {gameStatus !== 'loading' && gameStatus !== 'error' && (
           <>
             <div className={`grid grid-rows-6 gap-1 sm:gap-2 mb-4 sm:mb-6 ${shake ? 'animate-pulse' : ''}`}>
               {Array.from({ length: maxGuesses }).map((_, rowIndex) => (
